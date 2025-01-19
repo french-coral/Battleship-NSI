@@ -8,6 +8,8 @@ const gridSize = 8 * 8;
 let group1Clicked = [false, false]; // (10, 11)
 let group2Clicked = [false, false, false, false]; // (8, 16, 24, 32)
 let group3Clicked = [false, false, false]; // (43, 44, 45)
+const blueTiles = [9, 10, 7, 15, 23, 31, 42, 43, 44];
+const buttons = [];
 
 // Create buttons and add them to the grid
 for (let i = 0; i < gridSize; i++) {
@@ -16,7 +18,7 @@ for (let i = 0; i < gridSize; i++) {
   button.textContent = ""; // Remove label if not needed
 
   // Set initial color for specific tiles
-  if ([9, 10, 7, 15, 23, 31, 42, 43, 44].includes(i)) {
+  if (blueTiles.includes(i)) {
     button.style.backgroundColor = '#38b6ff'; // Set color to blue
   }
 
@@ -28,11 +30,11 @@ for (let i = 0; i < gridSize; i++) {
       button.classList.add('blinking'); // Add blinking class
       setTimeout(() => {
         button.classList.remove('blinking'); // Remove blinking class
-        if ([9, 10, 7, 15, 23, 31, 42, 43, 44].includes(i)){
-          button.style.backgroundColor = '#ffa338'; // Set color to blue
-        }else{
-        button.style.backgroundColor = 'gray';
-        }// Set color to gray for clicked tiles
+        if (blueTiles.includes(i)) {
+          button.style.backgroundColor = 'orange';
+        } else {
+          button.style.backgroundColor = 'gray'; // Change to gray
+        }
 
         // Update the state of the clicked tile in the respective group
         if (i === 9) group1Clicked[0] = true;
@@ -61,11 +63,30 @@ for (let i = 0; i < gridSize; i++) {
             document.querySelectorAll('.grid-item')[index].style.backgroundColor = 'red';
           });
         }
+
+        // Check if all previously blue tiles are red
+        if (blueTiles.every(index => document.querySelectorAll('.grid-item')[index].style.backgroundColor === 'red')) {
+          buttons.forEach(btn => {
+            btn.classList.add('blinking-red'); // Add blinking-red class to all tiles
+          });
+          setTimeout(() => {
+            buttons.forEach(btn => {
+              btn.classList.remove('blinking-red'); // Remove blinking-red class
+              btn.style.backgroundColor = ''; // Reset to original color
+              btn.classList.remove('clicked'); // Remove clicked class
+            });
+            // Reset group clicked states
+            group1Clicked = [false, false];
+            group2Clicked = [false, false, false, false];
+            group3Clicked = [false, false, false];
+          }, 2000); // Blinking duration of 2 seconds
+        }
       }, 500); // Delay of 500 milliseconds
     }
   });
 
   gridContainer.appendChild(button);
+  buttons.push(button);
 }
 
 // Add CSS for blinking effect
@@ -77,6 +98,14 @@ style.textContent = `
   @keyframes blink-animation {
     to {
       visibility: hidden;
+    }
+  }
+  .blinking-red {
+    animation: blink-red-animation 1s steps(2, start) infinite;
+  }
+  @keyframes blink-red-animation {
+    50% {
+      background-color: red;
     }
   }
 `;

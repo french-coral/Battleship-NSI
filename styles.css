@@ -36,10 +36,17 @@ body {
   background-color: #e8e8e8; /* Default tile color */
   border: none;
   border-radius: 5px; /* Rounded corners */
-  cursor: pointer;
   transition: background-color 0.2s ease; /* Smooth color transition */
 }
 
 .grid-item:hover {
   background-color: #ccc; /* Highlight on hover */
+}
+
+#Titre {
+  position: absolute;
+  top: 20px;
+  left: 30px;
+  font-size: 30px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
