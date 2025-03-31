@@ -45,8 +45,9 @@ trellis = MultiTrellis(trelli) #Gestion pour le 8x8
 
 #couleurs
 OFF = (0, 0, 0)
-BLUE = (0, 0, 255)
+BLUE = (0, 150, 250)
 MAGENTA = (255, 0, 255)
+RED = (255, 0, 0)
 
 class TrellisManager:
     def __init__(self, trellis):
@@ -97,7 +98,7 @@ class TrellisManager:
             else:
                 self.set_led(x, y, OFF)   # Éteint si déjà allumé
 
-    def initialize(self):
+    def initialize_board(self):
         """
         Initialisation des LEDs avec un effet dégradé, miam miam
         """
@@ -125,11 +126,29 @@ class TrellisManager:
         self.set_led(x,y,MAGENTA)
 
     def menu(self):
-        if
+        """
+        Set les leds et bouttons du menu en fonction du menu_type
+        solo: I
+        duo: I et II
+        """
+        if mode == 'PVE':
+            menu_type = 'Solo'
+            leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)] # le I du menu
+            for i in range(2):
+                self.set_led(leds_[i][0],leds_[i][1],BLUE)
+            for n in range(2,6):
+                self.set_led(leds_[n][0],leds_[n][1],RED)
+        else:
+            menu_type = 'Duo'
+            leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)] # le I et le II du menu
+            for i in range(6):
+                self.set_led(leds_[i][0],leds_[i][1],BLUE)
+
 
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
-manager.initialize()
+manager.initialize_board()
+manager.menu()
 
 #manager.benchmark(0,1)
 
