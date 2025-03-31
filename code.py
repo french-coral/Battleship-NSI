@@ -86,7 +86,7 @@ class TrellisManager:
         """
         return self.led_status[y][x]
 
-    def handle_button(self, x, y, edge):
+    def handle_button_test(self, x, y, edge):
         """
         Gère les appuis sur les boutons
         coord: (x,y)
@@ -105,7 +105,7 @@ class TrellisManager:
         for y in range(8):
             for x in range(8):
                 self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(x, y, self.handle_button) # associe la fonction handle quand le (x,y) est cliqué
+                self.trellis.set_callback(x, y, self.handle_button_test) # associe la fonction handle quand le (x,y) est cliqué
 
                 # Applique un dégradé
                 gradient_color = (x * 32, y * 32, 150)
@@ -125,25 +125,38 @@ class TrellisManager:
 
         self.set_led(x,y,MAGENTA)
 
+    def handle_menu(self, x, y, edge):
+        """
+        Gère le choix du menu en fonction du bouton pressé
+        """
+        if edge == NeoTrellis.EDGE_RISING:
+            if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
+                self.menu_type = 'Solo'
+                self.initialize_board()
+            elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
+                self.menu_type = 'Duo'
+            print(f"Mode sélectionné : {self.menu_type}")
+
+
     def menu(self):
         """
-        Set les leds et bouttons du menu en fonction du menu_type
-        solo: I
-        duo: I et II
+            Set les leds et bouttons du menu en fonction du  type de menu
+            solo: I
+            duo: I et II (sur le menu)
         """
+        leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
         if mode == 'PVE':
-            menu_type = 'Solo'
-            leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)] # le I du menu
             for i in range(2):
-                self.set_led(leds_[i][0],leds_[i][1],BLUE)
+                self.set_led(leds_[i][0],leds_[i][1], BLUE)
+                self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
             for n in range(2,6):
-                self.set_led(leds_[n][0],leds_[n][1],RED)
+                self.set_led(leds_[n][0],leds_[n][1], RED) #Pas dispo
         else:
-            menu_type = 'Duo'
-            leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)] # le I et le II du menu
             for i in range(6):
-                self.set_led(leds_[i][0],leds_[i][1],BLUE)
-
+                self.set_led(leds_[i][0],leds_[i][1], BLUE)
+                self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
 
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
