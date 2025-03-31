@@ -1,61 +1,137 @@
 import time
 import board
+import usb_cdc
 from adafruit_neotrellis.neotrellis import NeoTrellis
 from adafruit_neotrellis.multitrellis import MultiTrellis
 
-# Initialisation du I2C
+
+uart = usb_cdc.data if usb_cdc.data else None #Evite le None que je sais pas pourquoi c'est là
+
+# Temps d'attente avant de passer en mode autonome
+TIMEOUT_USB = 3
+
+def detect_mode():
+    """Détecte si la Feather est branchée à un PC ou juste à l’alimentation."""
+    if not uart:  # Si usb_cdc.data est None, pas de mode 1v1
+        return "PVE"
+
+    start_time = time.monotonic()
+    while time.monotonic() - start_time < TIMEOUT_USB:
+        if uart.in_waiting:  # Si on reçoit une donnée, on est connecté au PC
+            return "1v1"
+
+    return "PVE"  # Si rien reçu après le timeout, mode autonome
+
+# Détection au démarrage
+mode = detect_mode()
+print(f"Mode détecté: {mode}")
+
+if mode == "1v1":
+    print("Mode 1v1 activé (PC/raspberry connecté)")
+    uart.write(b"MODE 1v1\n")
+else:
+    print("Mode PVE activé (aucune connexion USB)")
+
+# Init du I2C
 i2c_bus = board.I2C()
 
-# Définition des modules NeoTrellis
+#modules NeoTrellis
 trelli = [
     [NeoTrellis(i2c_bus, False, addr=0x2E), NeoTrellis(i2c_bus, False, addr=0x2F)],
     [NeoTrellis(i2c_bus, False, addr=0x30), NeoTrellis(i2c_bus, False, addr=0x31)],
 ]
 trellis = MultiTrellis(trelli) #Gestion pour le 8x8
 
-#couleurs
+# Couleurs
 OFF = (0, 0, 0)
-BLUE = (0, 0, 255)
+BLUE = (0, 150, 250)
 MAGENTA = (255, 0, 255)
+RED = (255, 0, 0)
 
 class TrellisManager:
     def __init__(self, trellis):
         self.trellis = trellis
         self.led_status = [[OFF for i in range(8)] for i in range(8)]  # Stockage de l'état des LEDs dans une matrice
+        self.current_ship_cells = []  # Liste des cellules du bateau actuellement placé
+        self.current_ship_size = 0  # Taille du bateau à placer
+        self.current_ship_color = None  # Couleur du bateau en cours
 
     def get_led_id(self, x, y):
-        """Convertit (x, y) en un ID unique de LED (0-63)."""
+        """
+        Convertit les coord en un ID de la LED
+        coord: (x,y)
+        ID: (0-63)
+        """
         return y * 8 + x
 
     def get_led_coordinates(self, led_id):
-        """Convertit un ID LED (0-63) en coordonnées (x, y)."""
+        """
+        Convertit un ID LED en coordonnées
+        coord: (x,y)
+        ID: (0-63)
+        """
         return led_id % 8, led_id // 8
 
     def set_led(self, x, y, color):
-        """Change la couleur d'une LED et met à jour son état."""
+        """
+        Change la couleur d'une LED et met à jour son état
+        coord: (x,y)
+        color: obvious
+        """
         self.led_status[y][x] = color
         self.trellis.color(x, y, color)
 
     def get_led_status(self, x, y):
-        """Récupère l'état actuel d'une LED."""
+        """
+        Récupère l'état actuel d'une LED d'après ses coord
+        coord: (x,y)
+        """
         return self.led_status[y][x]
 
     def handle_button(self, x, y, edge):
-        """Gère les appuis sur les boutons."""
-        if edge == NeoTrellis.EDGE_RISING:
-            if self.get_led_status(x, y) == OFF:
-                self.set_led(x, y, BLUE)  # Allume en bleu
-            else:
-                self.set_led(x, y, OFF)   # Éteint si déjà allumé
+        """
+        Gère les appuis sur les boutons
+        coord: (x,y)
+        edge: RISING ou FALLING
+        """
+        if edge == NeoTrellis.EDGE_RISING:  # Button qui remonte
+            if self.current_ship_size > 0:
+                # Ajouter la cellule au bateau si ce n'est pas déjà présent
+                if (x, y) not in self.current_ship_cells:
+                    self.current_ship_cells.append((x, y))
+                    self.set_led(x, y, self.current_ship_color)  # Marquer cette cellule avec la couleur du bateau
 
-    def initialize(self):
-        """Initialisation des LEDs avec un effet dégradé."""
+                    # Vérifier si la taille du bateau est atteinte
+                    if len(self.current_ship_cells) == self.current_ship_size:
+                        self.finalize_ship_placement()  # Finaliser le placement du bateau
+
+    def finalize_ship_placement(self):
+        """Finalise le placement du bateau et change la couleur des LEDs en bleu."""
+        print(f"Bateau de taille {self.current_ship_size} placé avec succès.")
+        for (sx, sy) in self.current_ship_cells:
+            self.set_led(sx, sy, BLUE)  # Changer la couleur des LEDs en bleu
+        # Réinitialiser les paramètres pour le prochain bateau
+        self.current_ship_cells = []
+        self.current_ship_size = 0
+
+    def start_ship_placement(self, ship_size):
+        """Commence à placer un bateau avec la taille spécifiée."""
+        if ship_size in [2, 3, 4]:
+            self.current_ship_size = ship_size
+            # Définir une couleur différente pour chaque taille de bateau
+            self.current_ship_color = [(255, 0, 0), (0, 255, 0), (0, 0, 255)][[2, 3, 4].index(ship_size)]  # Rouge, Vert, Bleu
+            print(f"Placement du bateau de taille {ship_size} commencé.")
+
+    def initialize_board(self):
+        """
+        Initialisation des LEDs avec un effet dégradé
+        """
+        print("Initialisation du Trellis.")
         for y in range(8):
             for x in range(8):
                 self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(x, y, self.handle_button)
-
-                # Applique un effet dégradé
+                self.trellis.set_callback(x, y, self.handle_button)  # Associe la fonction handle au bouton (x, y)
+                # Applique un dégradé
                 gradient_color = (x * 32, y * 32, 150)
                 self.set_led(x, y, gradient_color)
                 time.sleep(0.05)
@@ -67,21 +143,14 @@ class TrellisManager:
                 self.set_led(x, y, OFF)
                 time.sleep(0.02)
 
-    def benchmark(self,x,y):
-        if self.get_led_status(x,y) != OFF:
-            self.set_led(x,y,OFF)
-
-        self.set_led(x,y,MAGENTA)
-
-
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
-manager.initialize()
+manager.initialize_board()
 
-#manager.benchmark(0,1)
+# Lancer le placement d'un bateau de taille 3 (par exemple)
+manager.start_ship_placement(3)  # Vous pouvez ajuster la taille du bateau ici (2, 3, 4)
 
 # Boucle principale
 while True:
     trellis.sync()  # Met à jour les événements des boutons
-    time.sleep(0.02) 
-
+    time.sleep(0.01)
