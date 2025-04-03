@@ -147,7 +147,7 @@ class TrellisManager:
             print(f"Mode sélectionné : {self.menu_type}")
 
 
-    def placer_bateaux(self):
+    def placer_bateaux_bots(self):
         """
         Place aléatoirement 3 bateaux sur la grille.
         Retourne une liste de tuples représentant avec positions des bateaux.
@@ -190,11 +190,6 @@ class TrellisManager:
 
         return bateaux_places
 
-    def solo_start(self):
-        bots_bateaux = self.placer_bateaux()
-        for bateau in bots_bateaux:
-            print(bateau)  # Affiche les coordonnées des bateaux choisi par le bot
-
 
 
     def menu(self):
@@ -216,6 +211,97 @@ class TrellisManager:
                 self.set_led(leds_[i][0],leds_[i][1], BLUE)
                 self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
                 self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
+
+
+    def main(self, IsStart):
+        """
+        Gestion du mode solo principal.
+        IsStart: Init du jeu et grille.
+        Tirs aléatoire sauf si un bateau est touché au tir précédent.
+        Garde l'état du jeu dans 'grid':
+        1 = Tir réalisé
+        2 = Bateaux
+        3 = Bateaux touchés (tir réalisé & Bateaux)
+        0 = Rien
+        """
+        if IsStart:
+            grid = [[0] * 8 for n in range(8)]  # Grid
+            # Règle de la grid : 0 = Rien ; 1 = Tir_déjà_réalisé ; 2 = bateaux
+            IsStart = False
+            bot_last_hit = None
+            bot_targets = []  # Cases autour d'un bateau touché (pour "tourné" autour)
+
+        if bot_attacking:
+            if bot_last_hit:
+                if not bot_targets:
+                    x, y = bot_last_hit
+                    possibles = [(x-1, y), (x+1, y), (x, y-1), (x, y+1)] # Les cases autour si un bateau a été touché
+
+                    for i, j in possibles:
+                        if 0 <= i < 8 and 0 <= j < 8: # Sur le plateau ?
+                            if grid[i][j] != 1 and grid[i][j] != 3 :# Cases déjà tentées
+                                bot_targets.append((i, j))
+
+                # Prendre une cible parmi celles possibles
+                tir = bot_targets.pop(0)
+
+            else:# Shoot a random
+                tir_x = random.randint(0, 7)
+                tir_y = random.randint(0, 7)
+                tir = (tir_x, tir_y)
+
+            print(f'Le bot a tiré en {tir}')
+
+            # Vérifie si un bateau a été touché
+            x, y = tir
+            if grid[x][y] == 2:  # 2 = bateau
+                print("Touché !")
+                bot_last_hit = tir  # Enregistre les coord touchés
+            else:
+                grid[x][y] = 1 # Ne pas re tiré au même endroit
+                print("Raté !")
+
+                # Si aucune cible spécifique à tester, on réinitialise le "tourne autour"
+                if not bot_targets:
+                    bot_last_hit = None
+
+            # Fin du tour du bot, passage au joueur
+            bot_attacking = False
+            bot_attacked = True
+
+        elif bot_attacked:
+            print("C'est au tour du joueur, en attente de son action...")
+
+            joueur_a_joue = False
+            while not joueur_a_joue:
+                # on attend que le joueur se bouge (ex: une touche pressée ou rage quit)
+                """
+                self.trellis.activate_key(x,y , NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(x,y, self.handle_menu)  # Méthode fictive à définir
+                if tir_joueur:
+                    joueur_a_joue = True
+                """
+
+            print(f"Le joueur a tiré en {tir_joueur}")
+
+            # Gestion du tir du joueur
+            x, y = tir_joueur
+            if grid[x][y] == 2:
+                print("Touché par le joueur !")
+            else:
+                print("Raté !")
+
+            # Fin du tour du joueur, passage au bot
+            bot_attacked = False
+            bot_attacking = True
+
+    def solo_start(self):
+        bots_bateaux = self.placer_bateaux_bots()
+        for bateau in bots_bateaux:
+            print(bateau)  # Affiche les coordonnées des bateaux choisi par le bot
+        main(True)
+
+
 
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
