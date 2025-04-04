@@ -215,8 +215,8 @@ class TrellisManager:
                     self.bot_attacking = False
                     self.bot_attacked = False
                     self.player_turn = False
-                    self.sunken_ships = []
-                    self.current_sunken_ships = []
+                    self.bot_sunken_ships = []
+                    self.current_bot_sunken_ships = []
                     self.player_grid = [[0] * 8 for _ in range(8)]
                     self.bot_grid = [[0] * 8 for _ in range(8)]
                     self.bot_last_hit = None
@@ -353,8 +353,17 @@ class TrellisManager:
         """
         Logique pour le tour du bot.
 
+        Logique de la grid:
+        0 = Rien
+        1 = Tir raté
+        2 = Bateau
+        3 = Bateau touché
+
+        Edit: Fix les print statement des bateaux coulés (repetition)
+
         """
         time.sleep(1.5)
+
         if self.bot_last_hit:  # Si le bot a touché un bateau au dernier tour
             if not self.bot_targets:  # Génère les cases adjacentes à vérifier
                 x, y = self.bot_last_hit
@@ -362,23 +371,35 @@ class TrellisManager:
 
                 for i, j in possibles:
                     if 0 <= i < 8 and 0 <= j < 8:  # Vérifie si la case est sur le plateau
-                        if self.player_grid[i][j] != 1 and self.player_grid[i][j] != 3 and self.player_grid[i][j] != 2:  # Évite les cases déjà essayées
+                        if self.player_grid[i][j] not in [1, 3]:  # Évite les cases déjà essayées (1 et 3 sont des cases essayées, cf main() docstring )
                             self.bot_targets.append((i, j))
 
-            # Prend une cible parmi celles probables
-            if self.bot_targets:
-                tir = self.bot_targets.pop(0)
+            # Si une direction est déjà déterminée
+            if hasattr(self, "bot_direction") and self.bot_direction:  # hasattr(object, 'name"); check si un objet à un attribut spécifique, ici si il existe une direction donner dans la class
+                dx, dy = self.bot_direction                                            # self.bot_direction : (1, 0) = Horizontal / (0, 1) = Vertical, quel direction les coordonnées doivent aller ?
+                next_x, next_y = self.bot_last_hit[0] + dx, self.bot_last_hit[1] + dy  # Ajoute l'offset en fonction de la direction déterminé
+
+                if 0 <= next_x < 8 and 0 <= next_y < 8 and self.player_grid[next_x][next_y] not in [1, 3]:  # Regarde si l'offset est dans le plateau
+                    tir = (next_x, next_y)
+                else:
+                    # Si la direction échoue, inverse la direction
+                    self.bot_direction = (-dx, -dy) # (1,0) => (-1, 0) on va chercher l'autre bout du bateau, e.g [00003310] le bot à fait 3,3 puis 1 donc doit venir à gauche des 3.
+                    next_x, next_y = self.bot_last_hit[0] + self.bot_direction[0], self.bot_last_hit[1] + self.bot_direction[1]
+                    if 0 <= next_x < 8 and 0 <= next_y < 8 and self.player_grid[next_x][next_y] not in [1, 3]: # Conditions d'existence du tir
+                        tir = (next_x, next_y)
+                    else:
+                        # Si aucune direction valide, repasse en mode aléatoire
+                        self.bot_direction = None
+                        tir = self.bot_targets.pop(0) if self.bot_targets else None # Continue si il reste des cible spécifique
             else:
-                self.bot_last_hit = None  # Si aucune cible adjacente, repasse en mode aléatoire
-                tir_x = random.randint(0, 7)
-                tir_y = random.randint(0, 7)
-                tir = (tir_x, tir_y)
+                # Prend une cible parmi celles probables
+                tir = self.bot_targets.pop(0) if self.bot_targets else None
         else:
             # Tir aléatoire
             while True:
                 tir_x = random.randint(0, 7)
                 tir_y = random.randint(0, 7)
-                if self.player_grid[tir_x][tir_y] != 1 and self.player_grid[tir_x][tir_y] != 3 and self.player_grid[tir_x][tir_y] != 2: # On changera cette merde
+                if self.player_grid[tir_x][tir_y] not in [1, 3]:  # Évite les cases déjà essayées
                     tir = (tir_x, tir_y)
                     break
 
@@ -387,39 +408,61 @@ class TrellisManager:
         # Vérifie si un bateau est touché
         x, y = tir
         if self.player_grid[x][y] == 2:  # 2 = bateau
-            print(f'Bot à touché en {(x,y)}')
-            self.player_grid[x][y] = 3  # Marque comme touché
+            print(f'Bot à touché en {(x, y)}')
+            self.player_grid[x][y] = 3  # Marque comme touché; 3 = bateau touché
             self.set_led(x, y, ORANGE)  # Orange pour un tir qui touche
-            self.bot_last_hit = tir  # Sauvegarde les coordonnées du tir
+
+            if not hasattr(self, "bot_direction") or not self.bot_direction: # Si il n'y a pas de direction, dans la class (hasattr) ou dans la fonction(self.bot_direction)
+                #
+                # Détermine la direction si une deuxième case est touchée
+                # (déjà dans un if statement qui dit que le bot viens de toucher)
+                # Les tuples (0,1)(0,-1)(1,0)(-1,0) sont les offsets qu'on essaye pour "chasser" la bateau
+                #
+                if self.bot_last_hit:
+                    if x == self.bot_last_hit[0]:  # Même ligne que le tir précédent = direction verticale
+                        self.bot_direction = (0, 1 if y > self.bot_last_hit[1] else -1) # (0,1) ou (0,-1) = verticale; selon si on monte ou descent (sur l'axe des ordonnées)
+                    elif y == self.bot_last_hit[1]:  # Même colonne = direction horizontale
+                        self.bot_direction = (1 if x > self.bot_last_hit[0] else -1, 0) # (1,0) ou (-1,0) = horizontale; selon si on va à droite ou à gauche (sur l'axe des abscisses)
+
+            self.bot_last_hit = (x, y)  # Sauvegarde les  pour le round d'aprèscoordonnées du tir pour le round d'après
 
             # Vérifie si le bateau est coulé
             for ship in self.player_ships:
                 if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Si toutes les cases du bateau sont touchées
-                    print(f"Bateau coulé par le bot : {ship}")
-                    for sx, sy in ship:
-                        self.set_led(sx, sy, RED)  # Rouge pour un bateau coulé
-                    self.bot_last_hit = None  # Réinitialise pour passer en mode aléatoire
-                    self.bot_targets = []  # Vide les cibles adjacentes
+                    if ship not in self.player_sunken_ships:
+                        self.player_sunken_ships.append(ship)
+                        print(f"Bateau coulé par le bot : {ship}") # // A FIX => si 2 bateaux coulé = 2 print (c'est pas ce qu'on veut)
+                        for sx, sy in ship:
+                            self.set_led(sx, sy, RED)  # Rouge pour un bateau coulé
+                        self.bot_last_hit = None  # Réinitialise pour passer en mode aléatoire
+                        self.bot_targets = []  # Vide les cibles adjacentes
+                        self.bot_direction = None  # Réinitialise la direction
+
                     break
+
 
         else:
             self.player_grid[x][y] = 1  # Marque comme raté
             self.set_led(x, y, GRAY)  # Gris pour un tir raté
-            print(f'Raté en {(x,y)}')
-            self.bot_last_hit = None
+            print(f'Raté en {(x, y)}')
 
         # Affiche le plateau du joueur pour visualiser le tir
         self.display_grid(self.player_grid, is_player_turn=False)
-        time.sleep(2)  # Ajoute un délai pour que le joueur puisse voir le tir (sinon ça pue)
+        time.sleep(2)  # Ajoute un délai pour que le joueur puisse voir le (sinon ça pue)
+
+        if self.current_player_sunken_ships != self.player_sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulé (ca marche pas vraiment enfait)
+            self.current_player_sunken_ships = self.player_sunken_ships
+            print(f"Bateau coulé par le bot : {self.current_player_sunken_ships}")
 
         # Vérifie si le jeu est fini
-        if all(tile != 2 for row in self.bot_grid for tile in row):
+        if all(tile != 2 for row in self.player_grid for tile in row):
             print("Le joueur a gagné !")
             self.game_running = False
             self.initialize_board("endGame_Lose") # Ici, "Lose" car c'est la fin du tour du bot
             return
 
-        print('\n')
+
+        print('')
         # Fin du tour du bot
         self.bot_attacking = False
         self.bot_attacked = True
@@ -427,6 +470,12 @@ class TrellisManager:
     def player_turn_logic(self):
         """
         Logique du joueur.
+
+        Logique de la grid:
+        0 = Rien
+        1 = Tir raté
+        2 = Bateau
+        3 = Bateau touché
 
         Edit: Régler la répetition du "Bateau coulé par le joueur : {ship}" à chaque play
 
@@ -460,7 +509,7 @@ class TrellisManager:
 
         # Gère le tir du joueur
         x, y = tir_joueur
-        if self.bot_grid[x][y] == 2: # Bateau touché
+        if self.bot_grid[x][y] == 2: # Bateau à l'endroit touché ?
             print(f'Joueur à touché en {(x,y)}')
             self.bot_grid[x][y] = 3  # Marque comme touché
             self.set_led(x, y, ORANGE)
@@ -468,7 +517,7 @@ class TrellisManager:
             # Vérifie si le bateau est coulé
             for ship in self.bot_ships:
                 if all(self.bot_grid[x][y] == 3 for x, y in ship):  # Si toutes les cases du bateau sont touchées
-                    if ship not in self.sunken_ships: self.sunken_ships.append(ship)
+                    if ship not in self.bot_sunken_ships: self.bot_sunken_ships.append(ship)
                     for x, y in ship:
                         self.set_led(x, y, RED)  # Rouge pour un bateau coulé
         elif self.bot_grid[x][y] == 0:
@@ -480,9 +529,9 @@ class TrellisManager:
 
 
         # Fin du tour du joueur / Annonce serial
-        if self.current_sunken_ships != self.sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulé (ca marche pas vraiment enfait)
-            self.current_sunken_ships = self.sunken_ships
-            print(f"Bateau coulé par le joueur : {self.current_sunken_ships}")
+        if self.current_bot_sunken_ships != self.bot_sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulé (ca marche pas vraiment enfait)
+            self.current_bot_sunken_ships = self.bot_sunken_ships
+            print(f"Bateau coulé par le joueur : {self.current_bot_sunken_ships}")
 
         # Vérifie si le jeu est fini
         if all(tile != 2 for row in self.bot_grid for tile in row):
@@ -491,7 +540,7 @@ class TrellisManager:
             self.initialize_board("endGame_Win") # Ici, "Win" car c'est la fin du tour du joueur
             return
 
-        print('\n')
+        print('')
         time.sleep(2)
         self.bot_attacked = False
         self.bot_attacking = True
@@ -499,6 +548,12 @@ class TrellisManager:
     def main(self):
         """
         Gestion du mode solo principal.
+
+        Logique de la grid:
+        0 = Rien
+        1 = Tir raté
+        2 = Bateau
+        3 = Bateau touché
 
         """
 
@@ -510,7 +565,8 @@ class TrellisManager:
         self.bot_attacked = False
         self.player_turn = False
         self.game_running = True
-        self.sunken_ships,self.current_sunken_ships = [],[] # Debug purposes
+        self.bot_sunken_ships,self.current_bot_sunken_ships = [],[] # Debug purposes
+        self.player_sunken_ships, self.current_player_sunken_ships = [],[] # Debug purposes
 
         ##################################################
         # Bateaux du joueur (hardcoded pour l'instant)
@@ -536,6 +592,9 @@ class TrellisManager:
 
 
         while self.game_running:
+
+            # Reset button ongoing dev
+            """
             # Vérifie si un reset a été demandé
             if self.reset_requested:
                 print("Reset en cours...")
@@ -543,6 +602,8 @@ class TrellisManager:
                 self.initialize_board("init")  # Réinitialise le plateau
                 self.menu()  # Retourne au menu principal
                 return  # Quitte la boucle principale
+
+            """
 
             if self.bot_attacking:
                 self.display_grid(self.player_grid, is_player_turn=False)  # Affiche le plateau du joueur
