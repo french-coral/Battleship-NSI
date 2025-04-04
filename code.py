@@ -290,6 +290,114 @@ class TrellisManager:
 
         return bateaux_places
 
+    def placement_bateaux(self):
+        """
+        Permet au joueur de placer ses propres bateaux.
+        Les bateaux sont placés dans l'ordre : Grand (4), Moyen (3), Petit (2).
+
+        Logique :
+        - Le joueur sélectionne une première case pour commencer un bateau.
+        - La deuxième case détermine la direction (horizontale ou verticale).
+        - Les cases suivantes sont ajoutées dans la direction choisie jusqu'à ce que le bateau soit complètement placé.
+
+        - Les cases doivent être adjacentes et alignées dans la direction choisie.
+        - Les cases déjà utilisées ou en dehors de la grille ne sont pas valides.
+
+        """
+        tailles_bateaux = [4, 3, 2]  # Tailles des bateaux à placer
+        self.player_ships = []  # Réinitialise les bateaux du joueur
+        bateau_en_cours = []  # Stocke temporairement les positions du bateau en cours de placement
+        direction = None  # Direction du bateau (None, "Horz", "Vert")
+        bateau_actuel = 0  # Index du bateau en cours de placement
+
+        def handle_placement(x, y, edge):
+            """
+            Callback pour gérer le placement des bateaux.
+            """
+            nonlocal bateau_en_cours, direction, bateau_actuel
+
+            if edge == NeoTrellis.EDGE_RISING:
+                # Si le joueur appuie sur une case déjà sélectionnée, annule cette case
+                if (x, y) in bateau_en_cours:
+                    bateau_en_cours.remove((x, y))
+                    self.set_led(x, y, OFF)  # Éteint la LED
+                    if len(bateau_en_cours) == 0:
+                        direction = None  # Réinitialise la direction si aucune case n'est sélectionnée
+                    return
+
+                # Si aucune case n'a encore été sélectionnée pour ce bateau
+                if not bateau_en_cours:
+                    bateau_en_cours.append((x, y))
+                    self.set_led(x, y, GREEN)  # Marque la première case en vert
+                elif len(bateau_en_cours) == 1: # Une seule case posée
+                    # Détermine la direction à partir de la deuxième case
+                    if abs(x - bateau_en_cours[0][0]) == 1 and y == bateau_en_cours[0][1]: # Vérifie si les cases sont adjacentes + sur l'axe des abscisse ('y' ne change pas)
+                        direction = "Horz"  # Horizontal
+                    elif abs(y - bateau_en_cours[0][1]) == 1 and x == bateau_en_cours[0][0]: # Vérifie si les cases sont adjacentes + sur l'axe des ordonnées ('x' ne change pas)
+                        direction = "Vert"  # Vertical
+                    else:
+                        print("Case invalide pour la direction.")
+                        return
+
+                    bateau_en_cours.append((x, y))
+                    self.set_led(x, y, GREEN)  # Marque la deuxième case en vert
+
+
+                else: # Pour le placement du bateau 3 et 4; equivalent d'un: elif len(bateau_en_cours) == 3 or 4.
+
+                    # Ajoute les cases suivantes dans la direction déterminée
+                    if direction == "Horz": # Devant ou derrière la selection déjà faite Horizontalement
+                        if x == bateau_en_cours[-1][0] + 1 and y == bateau_en_cours[-1][1]: # Derrière Horizontalement
+                            bateau_en_cours.append((x, y))
+                            self.set_led(x, y, GREEN)
+                        elif x == bateau_en_cours[0][0] - 1 and y == bateau_en_cours[0][1]: # Devant Horizontalement
+                            bateau_en_cours.insert(0, (x, y))
+                            self.set_led(x, y, GREEN)
+                        else:
+                            print("Case invalide pour continuer le bateau. C'est pas horizontale")
+                            return
+                    elif direction == "Vert": # Devant ou derrière la selection déjà faite Verticalement
+                        if y == bateau_en_cours[-1][1] + 1 and x == bateau_en_cours[-1][0]: # Derrière Verticalement
+                            bateau_en_cours.append((x, y))
+                            self.set_led(x, y, GREEN)
+                        elif y == bateau_en_cours[0][1] - 1 and x == bateau_en_cours[0][0]: # Devant Verticalement
+                            bateau_en_cours.insert(0, (x, y))
+                            self.set_led(x, y, GREEN)
+                        else:
+                            print("Case invalide pour continuer le bateau. C'est pas verticale")
+                            return
+
+                # Vérifie si le bateau est complètement placé
+                if len(bateau_en_cours) == tailles_bateaux[bateau_actuel]:
+                    # Marque le bateau comme placé (bleu)
+                    for bx, by in bateau_en_cours:
+                        self.set_led(bx, by, BLUE)
+
+                    # Ajoute le bateau à la liste des bateaux du joueur
+                    self.player_ships.append(bateau_en_cours)
+                    print(f"Bateau placé : {bateau_en_cours}")
+
+                    # Passe au bateau suivant
+                    bateau_actuel += 1
+                    bateau_en_cours = []
+                    direction = None
+
+                    # Vérifie si tous les bateaux ont été placés
+                    if bateau_actuel == len(tailles_bateaux):
+                        print("Tous les bateaux ont été placés.")
+                        self.trellis.clear_callbacks()  # Désactive les callbacks
+                        return
+
+        # Configure les callbacks pour les boutons
+        for y in range(8):
+            for x in range(8):
+                self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(x, y, handle_placement)
+
+        # Attend que tous les bateaux soient placés
+        while len(self.player_ships) < len(tailles_bateaux):
+            self.trellis.sync()
+            time.sleep(0.01)
 
 
     def menu(self):
@@ -569,11 +677,16 @@ class TrellisManager:
         self.player_sunken_ships, self.current_player_sunken_ships = [],[] # Debug purposes
 
         ##################################################
-        # Bateaux du joueur (hardcoded pour l'instant)
 
-        self.player_ships = [[(0, 4), (0, 5), (0, 6), (0, 7)],
-                             [(5, 6), (6, 6), (7, 6)],
-                             [(4, 3), (4, 4)]]
+        # Placement des bateaux par le joueur
+        print("Placement des bateaux...")
+        self.placement_bateaux()
+
+        # Bateaux du joueur (hardcoded pour l'instant)
+        # self.player_ships = [[(0, 4), (0, 5), (0, 6), (0, 7)],
+        #                    [(5, 6), (6, 6), (7, 6)],
+        #                   [(4, 3), (4, 4)]]
+
         for ship in self.player_ships:
             for x, y in ship:
                 self.player_grid[x][y] = 2  # Bateaux
