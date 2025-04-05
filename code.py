@@ -2,10 +2,11 @@
 ########################################################
 ########################################################
 
-Les commentaires présents le long de ce code ont été corrigé, verifié et clarifié, il se peut que certains "franglais"
-s'y glisse, je m'en excuse.
+Les commentaires présents le long de ce code ont été corrigé, verifié et clarifié, il se peut qu'un certain "franglais"
+s'y glisse, je m'en excuse. (c'est pour moi de base)
+
 J'espère être le plus claire possible. Bonne chance.
-En cas de question spécifique et TRES technique demandé à : Noah
+En cas de question spécifique et TRES technique demandé à : Noah (il connait bien le code)
 
 ########################################################
 ########################################################
@@ -134,7 +135,17 @@ class TrellisManager:
             if self.get_led_status(x, y) == OFF:
                 self.set_led(x, y, BLUE)  # Bleu
             else:
-                self.set_led(x, y, OFF)   # Éteint si déjà allumé
+                self.set_led(x, y, OFF)# Éteint si déjà allumé
+
+    def blink(self,x,y,color,init_color = None):
+        if not init_color: init_color = self.get_led_status(x, y)# Si pas préciser ca prend tout seul
+
+        for i in range(4):
+            self.set_led(x,y,color)
+            time.sleep(0.05)
+            self.set_led(x,y,OFF)
+
+        self.set_led(x,y,init_color) # Return to original state
 
     def initialize_board(self,step:str):
         """
@@ -302,6 +313,7 @@ class TrellisManager:
 
         - Les cases doivent être adjacentes et alignées dans la direction choisie.
         - Les cases déjà utilisées ou en dehors de la grille ne sont pas valides.
+        - Le joueur peut placé devant ou derrière la bateu en cours de placement tant qu'elles sont valides
 
         """
         tailles_bateaux = [4, 3, 2]  # Tailles des bateaux à placer
@@ -321,55 +333,160 @@ class TrellisManager:
                 if (x, y) in bateau_en_cours:
                     bateau_en_cours.remove((x, y))
                     self.set_led(x, y, OFF)  # Éteint la LED
-                    if len(bateau_en_cours) == 0:
-                        direction = None  # Réinitialise la direction si aucune case n'est sélectionnée
+
+                    if len(bateau_en_cours) < 2:
+                        direction = None  # Réinitialise la direction si aucune ou une seule case est sélectionnée
                     return
+
+
+                for ship in self.player_ships:
+                    if (x, y) in ship:
+                        self.blink(x, y,RED)
+                        return
+
+
+                print(f'Trying {x,y} in {bateau_en_cours}. Direction: {direction}/ Longueur: {len(bateau_en_cours)}\n') # Debugging
+
+
+                #################### 1ere case : Init ####################
 
                 # Si aucune case n'a encore été sélectionnée pour ce bateau
                 if not bateau_en_cours:
                     bateau_en_cours.append((x, y))
                     self.set_led(x, y, GREEN)  # Marque la première case en vert
-                elif len(bateau_en_cours) == 1: # Une seule case posée
-                    # Détermine la direction à partir de la deuxième case
-                    if abs(x - bateau_en_cours[0][0]) == 1 and y == bateau_en_cours[0][1]: # Vérifie si les cases sont adjacentes + sur l'axe des abscisse ('y' ne change pas)
-                        direction = "Horz"  # Horizontal
-                    elif abs(y - bateau_en_cours[0][1]) == 1 and x == bateau_en_cours[0][0]: # Vérifie si les cases sont adjacentes + sur l'axe des ordonnées ('x' ne change pas)
-                        direction = "Vert"  # Vertical
+                    print(f'Init at {x,y}')
+                    return
+
+
+                ############### 2eme case : init direction ###############
+
+                ##############################################################################
+                ##############################################################################
+
+                # Code initiale remplacer, upload github du 04/04/25 si besoin de tester
+
+                # Alternative qui devrait marcher / même logique qu'avant mais plus simple a comprendre
+
+                ##############################################################################
+                ##############################################################################
+
+                if len(bateau_en_cours) == 1:
+                    x0, y0 = bateau_en_cours[0]
+
+                    #Verification des case adjacentes pour déterminer la direction (horizontale et verticale)
+                    if abs(x - x0) == 1 and y == y0:
+                        direction = "Horz"
+                    elif abs(y - y0) == 1 and x == x0:
+                        direction = "Vert"
                     else:
-                        print("Case invalide pour la direction.")
+                        # Mauvais clic : reset du placement en cours (tout le bateau est reset) sinon ca fait des coincement de merde impossible à regler
+                        print("Mauvaise direction, reset du bateau.")
+                        self.blink(x, y, RED, OFF) # Ou GREEN si besoin de l'effet direct
+                        for bx, by in bateau_en_cours:
+                            self.set_led(bx, by, OFF)
+                        bateau_en_cours = []
+                        direction = None
                         return
+
 
                     bateau_en_cours.append((x, y))
                     self.set_led(x, y, GREEN)  # Marque la deuxième case en vert
+                    print(f'2nd case at {x,y} / Direction detected: {direction}')
 
 
-                else: # Pour le placement du bateau 3 et 4; equivalent d'un: elif len(bateau_en_cours) == 3 or 4.
+                ################### 3eme  et 4eme case ###################
 
-                    # Ajoute les cases suivantes dans la direction déterminée
-                    if direction == "Horz": # Devant ou derrière la selection déjà faite Horizontalement
-                        if x == bateau_en_cours[-1][0] + 1 and y == bateau_en_cours[-1][1]: # Derrière Horizontalement
-                            bateau_en_cours.append((x, y))
-                            self.set_led(x, y, GREEN)
-                        elif x == bateau_en_cours[0][0] - 1 and y == bateau_en_cours[0][1]: # Devant Horizontalement
+                ##############################################################################
+                ##############################################################################
+
+                # Le code initial a été remplacé par le code qui suit
+                # // Comporte tout le debug initial sur Github //
+                # Voir upload Github du 04/04/25 pour avoir une version test qui marche
+                # Code revisé et plus simple à lire
+                # La logique reste la même, le code originale ne prenait pas le sens de placement mais seulement la direction
+                # Le code suivant prend en compte les deux avec le xs et xy basé sur le max du batea_en_cours
+
+                ##############################################################################
+                ##############################################################################
+
+
+                elif direction == "Horz" and len(bateau_en_cours) > 1:
+
+                    print('In Horizontal placement')
+
+                    y_ref = bateau_en_cours[0][1] # Horizontal = même y pour toute les cases
+
+                    xs = [p[0] for p in bateau_en_cours] # Liste des x du bateaux en cours
+                    x_head = max(xs) # "Devant" / "tete" du bateau
+                    x_tail = min(xs) # "Derrière" / "queue" du bateau
+
+                    if y == y_ref:
+                        if x == x_head - 1:
                             bateau_en_cours.insert(0, (x, y))
                             self.set_led(x, y, GREEN)
-                        else:
-                            print("Case invalide pour continuer le bateau. C'est pas horizontale")
-                            return
-                    elif direction == "Vert": # Devant ou derrière la selection déjà faite Verticalement
-                        if y == bateau_en_cours[-1][1] + 1 and x == bateau_en_cours[-1][0]: # Derrière Verticalement
+                            print('on head')
+                        elif x == x_tail + 1:
                             bateau_en_cours.append((x, y))
                             self.set_led(x, y, GREEN)
-                        elif y == bateau_en_cours[0][1] - 1 and x == bateau_en_cours[0][0]: # Devant Verticalement
-                            bateau_en_cours.insert(0, (x, y))
-                            self.set_led(x, y, GREEN)
+                            print('on tail')
                         else:
-                            print("Case invalide pour continuer le bateau. C'est pas verticale")
+                            print("Clic hors sujet, pas horizontal = reset.")
+                            self.blink(x, y, RED)
+                            for bx, by in bateau_en_cours:
+                                self.set_led(bx, by, OFF)
+                            bateau_en_cours = []
+                            direction = None
                             return
+                    else:
+                        print("Mauvaise ligne pour direction horizontale = reset.")
+                        self.blink(x, y, RED)
+                        for bx, by in bateau_en_cours:
+                            self.set_led(bx, by, OFF)
+                        bateau_en_cours = []
+                        direction = None
+                        return
+
+                elif direction == "Vert" and len(bateau_en_cours) > 1:
+
+                    print('In Vertical placement')
+
+                    x_ref = bateau_en_cours[0][0] # Vertical = même x pour toute les cases
+
+                    ys = [p[1] for p in bateau_en_cours] # Les y du bateau en cours de placement
+                    y_head = max(ys)
+                    y_tail = min(ys)
+
+                    if x == x_ref:
+                        if y == y_head + 1:
+                            bateau_en_cours.insert(0,(x, y))
+                            self.set_led(x, y, GREEN)
+                            print('on head')
+                        elif y == y_tail - 1:
+                            bateau_en_cours.append((x, y))
+                            self.set_led(x, y, GREEN)
+                            print('on tail')
+                        else:
+                            print("Clic hors sujet, pas vertical = reset.")
+                            self.blink(x, y, RED)
+                            for bx, by in bateau_en_cours:
+                                self.set_led(bx, by, OFF)
+                            bateau_en_cours = []
+                            direction = None
+                            return
+                    else:
+                        print("Mauvaise colonne pour direction verticale = reset.")
+                        self.blink(x, y, RED)
+                        for bx, by in bateau_en_cours:
+                            self.set_led(bx, by, OFF)
+                        bateau_en_cours = []
+                        direction = None
+                        return
+
 
                 # Vérifie si le bateau est complètement placé
                 if len(bateau_en_cours) == tailles_bateaux[bateau_actuel]:
                     # Marque le bateau comme placé (bleu)
+                    print("//Bateau placé//")
                     for bx, by in bateau_en_cours:
                         self.set_led(bx, by, BLUE)
 
@@ -385,7 +502,7 @@ class TrellisManager:
                     # Vérifie si tous les bateaux ont été placés
                     if bateau_actuel == len(tailles_bateaux):
                         print("Tous les bateaux ont été placés.")
-                        self.trellis.clear_callbacks()  # Désactive les callbacks
+                        self.clear_all_callbacks()  # Désactive les callbacks # Désactive les callbacksn. //edit: marche pas comme je voulais
                         return
 
         # Configure les callbacks pour les boutons
@@ -399,14 +516,24 @@ class TrellisManager:
             self.trellis.sync()
             time.sleep(0.01)
 
+    def clear_all_callbacks(self):
+        """
+        Clear all callbacks des bouttons.
+
+        """
+        for y in range(8):
+            for x in range(8):
+                self.trellis.set_callback(x, y, None)
+
 
     def menu(self):
         """
             Set les leds et bouttons du menu en fonction du  type de menu
-            solo: I
-            duo: I et II (sur le menu)
+            Solo: I
+            Duo: I et II (sur le menu)
 
             Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
+
         """
         leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
         if mode == 'PVE':
@@ -520,12 +647,18 @@ class TrellisManager:
             self.player_grid[x][y] = 3  # Marque comme touché; 3 = bateau touché
             self.set_led(x, y, ORANGE)  # Orange pour un tir qui touche
 
-            if not hasattr(self, "bot_direction") or not self.bot_direction: # Si il n'y a pas de direction, dans la class (hasattr) ou dans la fonction(self.bot_direction)
-                #
-                # Détermine la direction si une deuxième case est touchée
-                # (déjà dans un if statement qui dit que le bot viens de toucher)
-                # Les tuples (0,1)(0,-1)(1,0)(-1,0) sont les offsets qu'on essaye pour "chasser" la bateau
-                #
+            if not hasattr(self, "bot_direction") or not self.bot_direction:
+
+        ########################################################################
+
+            # hasattr check si un objet existe dans une class : hasattr(object, attribute_name)
+            # Si il n'y a pas de direction, dans la class (hasattr)/ ou dans la fonction(self.bot_direction)
+            # Détermine la direction si une deuxième case est touchée
+            # (déjà dans un if statement qui dit que le bot viens de toucher)
+            # Les tuples (0,1)(0,-1)(1,0)(-1,0) sont les offsets qu'on essaye pour "chasser" la bateau
+
+        ########################################################################
+
                 if self.bot_last_hit:
                     if x == self.bot_last_hit[0]:  # Même ligne que le tir précédent = direction verticale
                         self.bot_direction = (0, 1 if y > self.bot_last_hit[1] else -1) # (0,1) ou (0,-1) = verticale; selon si on monte ou descent (sur l'axe des ordonnées)
@@ -539,7 +672,6 @@ class TrellisManager:
                 if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Si toutes les cases du bateau sont touchées
                     if ship not in self.player_sunken_ships:
                         self.player_sunken_ships.append(ship)
-                        print(f"Bateau coulé par le bot : {ship}") # // A FIX => si 2 bateaux coulé = 2 print (c'est pas ce qu'on veut)
                         for sx, sy in ship:
                             self.set_led(sx, sy, RED)  # Rouge pour un bateau coulé
                         self.bot_last_hit = None  # Réinitialise pour passer en mode aléatoire
@@ -613,7 +745,6 @@ class TrellisManager:
             self.trellis.sync()
             time.sleep(0.01)
 
-        # print(f"Joueur a tiré en {tir_joueur}") #/Debug/ Ca spam un peu trop la console
 
         # Gère le tir du joueur
         x, y = tir_joueur
@@ -682,14 +813,22 @@ class TrellisManager:
         print("Placement des bateaux...")
         self.placement_bateaux()
 
+        # --------------- Fast testing purposes -------------------
+        #
         # Bateaux du joueur (hardcoded pour l'instant)
         # self.player_ships = [[(0, 4), (0, 5), (0, 6), (0, 7)],
         #                    [(5, 6), (6, 6), (7, 6)],
         #                   [(4, 3), (4, 4)]]
+        #
+        # ---------------------------------------------------------
 
+        #Placement des bateaux du joueur sur la grille de jeu
+        print('Bateaux du joueur :')
         for ship in self.player_ships:
+            print(ship) # Affiche les coordonnées des bateaux du joueur (fraichement choisi)
             for x, y in ship:
                 self.player_grid[x][y] = 2  # Bateaux
+
 
         ##################################################
         # Bateaux du bot (utilise placer_bateaux_bots)
@@ -706,7 +845,7 @@ class TrellisManager:
 
         while self.game_running:
 
-            # Reset button ongoing dev
+            # Reset button ongoing dev (j'espère que personne ne lira ca et que j'aurais dev ca d'ici là)
             """
             # Vérifie si un reset a été demandé
             if self.reset_requested:
