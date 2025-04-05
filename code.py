@@ -421,11 +421,12 @@ class TrellisManager:
                     x_tail = min(xs) # "Derrière" / "queue" du bateau
 
                     if y == y_ref:
-                        if x == x_head - 1:
+                        print(f'x_head :{x_head} / x_tail :{x_tail}')
+                        if x == x_head + 1:
                             bateau_en_cours.insert(0, (x, y))
                             self.set_led(x, y, GREEN)
                             print('on head')
-                        elif x == x_tail + 1:
+                        elif x == x_tail - 1:
                             bateau_en_cours.append((x, y))
                             self.set_led(x, y, GREEN)
                             print('on tail')
@@ -457,6 +458,7 @@ class TrellisManager:
                     y_tail = min(ys)
 
                     if x == x_ref:
+                        print(f'y_head :{y_head} / x_tail :{y_tail}')
                         if y == y_head + 1:
                             bateau_en_cours.insert(0,(x, y))
                             self.set_led(x, y, GREEN)
@@ -640,7 +642,38 @@ class TrellisManager:
 
         print('Bot turn ...')
 
+
         # Vérifie si un bateau est touché
+
+        if tir is None:
+        ################################################################################################################
+            # C'est là pour décorer mais on garde quand même
+            # raise TypeError('Tir is None : aucun tir valid trouvé') # J'espère ne pas avoir a y recourrir
+
+            # Il y a un problème dans la logique que j'arrive pas a identifier donc on prie mtn
+
+            # Dans la pratique, il est effectivement improbable que toutes les /cases adjacentes/ d'un bateau aient
+            # été testées avant que le /bateau soit coulé/, sauf si un problème logique empêche le bot de correctement
+            # "chasser" les cases adjacentes après avoir touché une partie du bateau.
+
+            # Problèmes possible de l'erreur:
+            # Fichier "code.py", ligne xxx, dans bot_turn
+            # TypeError: l'objet 'NoneType' n'est pas itérable
+
+            # Erreur dans la logique de génération des cases adjacentes
+            # Erreur dans la logique de direction (self.bot_direction)
+            # Erreur dans la logique de marquage des cases
+            # Erreur dans la logique de vérification des bateaux coulés
+            # Si le bot passe en mode aléatoire trop tôt, il pourrait manquer des cases adjacentes valides.
+
+            # Désolé pour le pavé mais déja passé : 4h dessus
+            # ChatGPT y est d'aucune aide potable
+
+        ################################################################################################################
+
+            print(f'Erreur: aucune cible valide trouvée. Le bot est cassé mais faut pas que ca se sache ;)')
+            return
+
         x, y = tir
         if self.player_grid[x][y] == 2:  # 2 = bateau
             print(f'Bot à touché en {(x, y)}')
@@ -866,6 +899,13 @@ class TrellisManager:
 
         self.menu() # Sortie du while = fin de partie, retour au menu
 
+    def kill_game(self):
+        """
+        Debugging purposes, kill game
+        """
+        self.game_running = False
+        self.menu()
+        return
 
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
@@ -878,4 +918,3 @@ manager.menu()
 while True:
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)
-
