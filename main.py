@@ -1,4 +1,5 @@
 import serial.tools.list_ports
+import time
 
 def detect_devices():
     """
@@ -50,16 +51,17 @@ def safe_open(port_name, baud=9600, timeout=1):
         return None
     
 port_plateau_1 = safe_open(get_port_by_serial("4657A1084E384B53202020522D4316FF")) # UID du plateau 1, voir boot_out.txt dans CIRCUITPY(D:)
-#port_plateau_2 = get_port_by_serial("ICIMETTRELUIDDUPLATEAU2")
+#port_plateau_2 = safe_open(get_port_by_serial("ICIMETTRELUIDDUp2"))
 
 if port_plateau_1:
-    ser1 = serial.Serial(port_plateau_1, 9600, timeout=1)
+    p1 = port_plateau_1
     print("Plateau 1 connecté.")
 #if port_plateau_2:
-    #ser2 = serial.Serial(port_plateau_2, 9600, timeout=1)
-    #print("Plateau 2 connecté.")
+#    p2 = port_plateau_2
+    print("Plateau 2 connecté.")
 else:
     print("Aucun plateau connecté.")
+time.sleep(2)
 
 ###########################################################################
 
@@ -81,34 +83,126 @@ else:
     #
     #
     # Les fonctions suivante sont là pour decrypter les messages et les envoyés.
-    # lire_message(ser): ser étant le plateau
-    # envoyer(ser,message): ser étant le plateau et message le message à envoyer
+    # lire(plateau): plateau étant le serial du plateau
+    # envoyer(plateau,message): plateau étant le serial du plateau et message le message à envoyer
     
 ###########################################################################
 
-def lire_message(ser):
-    if ser.in_waiting:
-        msg = ser.readline().decode().strip()
-        print("Reçu :", msg)
-        return msg
+def envoyer(plateau, message):
+    try:
+        print(f'<<< {message}')  # Débogage
+        plateau.write((message + "\n").encode())
+    except Exception as exept:
+        print(f'Erreur envoi : {exept}')
+
+def lire(plateau): 
+    if plateau.in_waiting:
+        try:
+            msg = plateau.readline().decode().strip()
+            print(f'>>> {msg}')  # Débogage
+            return msg
+        except Exception as exept:
+            print(f'Erreur de lecture : {exept}')
     return None
 
-def envoyer(ser, message):
-    ser.write((message + "\n").encode())
-    print("Envoyé :", message)
+
+envoyer(p1, "TEST")
+response = lire(p1)
+if response:
+    print(f"Réponse du plateau : {response}")
+else:
+    print("Aucune réponse du plateau.")
+
+"""  
+envoyer(p1, "HELLO")
+time.sleep(0.5)
 
 while True:
-    """
-    Boucle principale du jeu.
-    Pour le moment test solo.
-    """
-    msg1 = lire_message(ser1) # msg du plateau_1
-    if msg1:
-        if msg1.startswith("PLACEMENT") or msg1.startswith("TIR"):
-            coord = msg1.split(":")[1]
+    # Phase de placement des bateaux
+    envoyer(p1, "PLACE")
+    ready1 = False
+    while not ready1:
+        cmd1 = lire(p1)
+        if cmd1 == "READY":
+            ready1 = True
+    print("Le joueur est prêt. Début de la partie.")
+
+    while True:
+        print("\n---- TOUR du Joueur 1 ----")
+        envoyer(p1, "YOURTURN")
+        cmd = lire(p1)
+        if cmd and cmd.startswith("TIR:"):
+            # Simule une réponse du second plateau
+            _, coord = cmd.split(":")
             x, y = map(int, coord.split(","))
-            print(f"Action sur plateau 1 : x={x}, y={y}")
-            # Ex: test réponse
-            envoyer(ser1, f"LED:{x},{y},green")
+            print(f"Tir reçu en ({x}, {y})")
+
+            # Simule un résultat aléatoire
+            import random
+            result = random.choice(["RESULT:RATE", "RESULT:TOUCHE", "RESULT:COULE"])
+            print(f"Résultat simulé : {result}")
+            envoyer(p1, result)
+
+            if result == "RESULT:COULE":
+                print("Un bateau a été coulé.")
+            elif result == "RESULT:WIN":
+                print("Le joueur 1 a gagné !")
+                break
+
+# Boucle principale
+while True:
+    # Phase de placement des bateaux
+    envoyer(p1, "PLACE")
+    envoyer(p2, "PLACE")
+
+    ready1, ready2 = False, False
+    while not (ready1 and ready2):
+        if not ready1:
+            cmd1 = lire(p1)
+            if cmd1 == "READY":
+                ready1 = True
+        if not ready2:
+            cmd2 = lire(p2)
+            if cmd2 == "READY":
+                ready2 = True
+    print("Les deux joueurs sont prêts. Début de la partie.")
+
+    nom = ['Joueur 1','Joueur 2']
+    joueur_actuel = 0
+
+    while True:
+        
+       # Boucle principale du jeu.
+       # Pour le moment test solo.
 
 
+        
+        print(f"\n---- TOUR du {nom[joueur_actuel]} ----") # Styling
+
+        if joueur_actuel == 0:
+            envoyer(p1, "YOURTURN")
+            cmd = lire(p1)
+            if cmd and cmd.startswith("TIR:"): # Detection de l'arrivée du tir
+                envoyer(p2, cmd)  # Envoie le tir au plateau 2
+                result = lire(p2)
+                if result:
+                    envoyer(p1, result)  # Envoie le résultat au plateau 1
+                    if result == "RESULT:WIN":
+                        print("Le joueur 1 a gagné !")
+                        break
+            joueur_actuel = 1
+        else:
+            envoyer(p2, "YOURTURN")
+            cmd = lire(p2)
+            if cmd and cmd.startswith("TIR:"):
+                envoyer(p1, cmd)  # Envoie le tir au plateau 1
+                result = lire(p1)
+                if result:
+                    envoyer(p2, result)  # Envoie le résultat au plateau 2
+                    if result == "RESULT:WIN":
+                        print("Le joueur 2 a gagné !")
+                        break
+            joueur_actuel = 0
+
+        print("Partie terminée.")
+        break"""

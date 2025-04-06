@@ -1,6 +1,5 @@
 """
-########################################################
-########################################################
+################################################################################################################
 
 Les commentaires présents le long de ce code ont été corrigé, verifié et clarifié, il se peut qu'un certain "franglais"
 s'y glisse, je m'en excuse. (c'est pour moi de base)
@@ -8,8 +7,7 @@ s'y glisse, je m'en excuse. (c'est pour moi de base)
 J'espère être le plus claire possible. Bonne chance.
 En cas de question spécifique et TRES technique demandé à : Noah (il connait bien le code)
 
-########################################################
-########################################################
+################################################################################################################
 
 Informations sur le code / jeu :
 - Le jeu est un jeu de 2 joueurs (Bataille Navale).
@@ -24,47 +22,27 @@ Informations sur le code / jeu :
 - Menu avec "Solo" et "Duo" mode.  // vouer à changer
 - Un mode solo est disponible, il est codé sur le plateau directement.
 
-- Le mode duo est disponible seulement si les 2 plateaux sont branchés.
+- Le mode duo est disponible seulement si les 2 plateaux sont branchés. (dans la théorie)
 
-########################################################
-########################################################
+Fonctionnement du mode 1v1:
+- Le script maître demande au 2 plateaux de placer leur bateaux respectifs : quand c'est fait les 2 renvoire READY
+- Puis le script maître gère simplement le transfert d'information et la logique de tour
+- Le leds , logique de jeu, placement de bateaux, touché coule etc sont gérer respectivement sur chacunes des cartes
+/// Logique en cours de DEV, les plateaux ne se connecte même pas corrrectement pour le moment///. 06/04
+
+################################################################################################################
 
 """
 
 import time
+import busio
 import board
 import usb_cdc
+import supervisor
 import random
+import sys
 from adafruit_neotrellis.neotrellis import NeoTrellis
 from adafruit_neotrellis.multitrellis import MultiTrellis
-
-
-uart = usb_cdc.data if usb_cdc.data else None #Evite le None que je sais pas pourquoi c'est là
-
-# Temps d'attente avant de passer en mode autonome
-TIMEOUT_USB = 3
-
-def detect_mode():
-    """Détecte si la Feather est branchée à un PC ou juste à l’alimentation."""
-    if not uart:  # Si usb_cdc.data est None, pas de mode 1v1
-        return "PVE"
-
-    start_time = time.monotonic()
-    while time.monotonic() - start_time < TIMEOUT_USB:
-        if uart.in_waiting:  # Si on reçoit une donnée, on est connecté au PC
-            return "1v1"
-
-    return "PVE"  # Si rien reçu après le timeout, mode autonome
-
-# Détection au démarrage
-mode = detect_mode()
-print(f"Mode détecté: {mode}")
-
-if mode == "1v1":
-    print("Mode 1v1 activé (PC/raspberry connecté)")
-    uart.write(b"MODE 1v1\n")
-else:
-    print("Mode PVE activé (aucune connexion USB)")
 
 
 # Init du I2C
@@ -80,13 +58,122 @@ trellis = MultiTrellis(trelli) #Gestion pour le 8x8
 
 #couleurs
 OFF = (0, 0, 0)
-BLUE = (0, 150, 250)
-GREEN = (0,255,0)
+BLUE = (0, 150, 250) # Vue des bateaux (placement et instance attaqué)
+GREEN = (0,255,0) # Placement des bateaux et animation de win
 FIN_COLOR = None # Pour les animation de fin de solo mode
-MAGENTA = (255, 0, 255)
-RED = (255, 0, 0)
+MAGENTA = (255, 0, 255) # Complétement inutile
+RED = (255, 0, 0) # Tir raté ou placement invalide + animation de loose
 GRAY = (100, 100, 100)  # Gris pour les tirs ratés du bot
 ORANGE = (255, 165, 0)  # Orange pour les tirs qui touchent un bateau
+
+
+#############################################
+
+# Les fonctions suivantes sont à usage unique, seulement pour set up le mode PVE ou 1V1
+
+#############################################
+
+
+def waiting_animation():
+    """
+    J'étais déprimer que le 1v1 marchait pas, je me suis fait plaisirs, voila
+    """
+    for i in range(2):
+        trellis.color(3, 3, GREEN)
+        trellis.color(3, 4, OFF)
+        time.sleep(0.2)
+        trellis.color(4, 3, GREEN)
+        trellis.color(3, 3, OFF)
+        time.sleep(0.2)
+        trellis.color(4, 4, GREEN)
+        trellis.color(4, 3, OFF)
+        time.sleep(0.2)
+        trellis.color(3, 4, GREEN)
+        trellis.color(4, 4, OFF)
+        time.sleep(0.2)
+    trellis.color(3, 4, OFF)
+
+
+# Serial
+def wait_for_connection():
+    """
+    Attend l'arrivée de la connection
+
+    Edit: Ne marche pas du tout 06/04
+
+    """
+    timeout = 0
+    waiting_animation()
+    while usb_cdc.data is None:
+        print("Attente de la connexion USB CDC...")
+        timeout += 1
+        if timeout > 5:
+            print("Erreur de connexion USB CDC")
+            return
+        time.sleep(0.3)
+
+# Set la communication entre le pc et la carte (ne marche pas pour le moment)
+if usb_cdc.data:
+    communication = usb_cdc.data
+    print(f"Valeur de communication : {communication}")
+    print("Communication USB initialisée.\n")
+else:
+    communication = None
+    print("Erreur : usb_cdc.data is None. Aucune communication USB disponible.")
+
+
+def lire():
+    """
+    Récupère les messages via USB et les sépare si plusieurs messages sont collés. (pb au deboggage)
+    Il existe un version bien plus simple cependant elle est là pour faire des tests
+
+    """
+    if communication is None:
+        print("Erreur : communication est None.")
+        return None
+    if communication.in_waiting:
+        try:
+            data = communication.read(communication.in_waiting).decode().strip()
+            print(f"Message reçu : {data}")  # Débogage
+            return data
+        except Exception as exept:
+            print(f"Erreur de lecture : {exept}")
+    else:
+        print("Aucuns messages en attente.")
+    return None
+
+def envoyer(message):
+    """
+    Envoie un message via USB.
+    """
+    try:
+        print(f"Message envoyé : {message}")  # Débogage
+        communication.write((message + "\n").encode())
+    except Exception as exept:
+        print(f"Erreur d'envoi : {exept}")
+
+def detect_mode():
+    """
+    Détecte si le plateau est connecté à un script maître (pc ou raspberry) via USB.
+
+    Edit: Fonction originale vouer à changer. 06/04
+    """
+    # if supervisor.runtime.serial_connected: # renvoie True : je travail encore dessus
+    #    return "1v1"
+
+    if communication:
+        print("En attente de connexion avec le script maître...")
+        start_time = time.monotonic()
+        waiting_animation()
+        while time.monotonic() - start_time < 5:  # Timeout de 5 secondes
+            if communication.in_waiting:
+                msg = lire()
+                print(f"Message reçu pendant la détection : {msg}")  # Débogage
+                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence
+                    return "1v1"
+        print("Aucun message reçu. Passage en mode PVE.")
+    return "PVE"
+
 
 class TrellisManager:
     def __init__(self, trellis):
@@ -95,7 +182,7 @@ class TrellisManager:
 
     def get_led_id(self, x, y):
         """
-        Convertit les coord en un ID de la LED
+        Convertit les coord en un ID de la LED, pas utiliser vraiment, plus pour du débug si besoin
         coord: (x,y)
         ID: (0-63)
         """
@@ -243,20 +330,29 @@ class TrellisManager:
         Gère le choix du menu en fonction du bouton pressé
 
         Edit: Sera modifier si déplacer sur raspberry pi.  03/04
+              Peut-être pas enfait 06/04
         """
         if edge == NeoTrellis.EDGE_RISING:
             if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
                 self.menu_type = 'Solo'
                 self.initialize_board("menu")
                 # self.initialize_board("endGame_Lose") #/Debug/ Animation testing purposes
-                self.main()
+                self.main1()
 
 
             elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
-                self.menu_type = 'Duo'
+                self.initialize_board('endGame_Lose')
+                self.menu()
 
-            print(f"Mode sélectionné : {self.menu_type}")
+                # self.menu_type = 'Duo'
+                # self.initialize_board("menu")
+                # self.main2()
 
+            # if self.menu_type :print(f"Mode sélectionné : {self.menu_type}")
+
+    #########################################################################################
+    ############################ Mode PVE a partir de cette ligne ###########################
+    #########################################################################################
 
     def placer_bateaux_bots(self):
         """
@@ -537,6 +633,12 @@ class TrellisManager:
             Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
         """
+
+        print("Affichage du menu...")
+        # Abandonner pour le moment :(
+        # mode = self.detect_mode()  # Détecte si une communication est établie
+        # print(f"Mode détecté : {mode}")
+
         leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
         if mode == 'PVE':
             for i in range(2):
@@ -545,7 +647,10 @@ class TrellisManager:
                 self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
             for n in range(2,6):
                 self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas dispo donc rouge
-        else:
+                # Le fait que le mode duo s'active en PVE est pour le deboggage
+                self.trellis.activate_key(leds_[n][0], leds_[n][1], NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(leds_[n][0], leds_[n][1], self.handle_menu)
+        else: # Les 2 modes sont disponibles
             for i in range(6):
                 self.set_led(leds_[i][0],leds_[i][1], BLUE)
                 self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
@@ -586,7 +691,7 @@ class TrellisManager:
                 else:  # Case vide
                     self.set_led(x, y, OFF)
 
-    def bot_turn(self):
+    def bot_turn_logic(self):
         """
         Logique pour le tour du bot.
 
@@ -672,6 +777,9 @@ class TrellisManager:
         ################################################################################################################
 
             print(f'Erreur: aucune cible valide trouvée. Le bot est cassé mais faut pas que ca se sache ;)')
+            self.bot_targets = None
+            self.bot_direction = None
+            self.bot_last_hit = None
             return
 
         x, y = tir
@@ -817,7 +925,7 @@ class TrellisManager:
         self.bot_attacked = False
         self.bot_attacking = True
 
-    def main(self):
+    def main1(self):
         """
         Gestion du mode solo principal.
 
@@ -892,7 +1000,7 @@ class TrellisManager:
 
             if self.bot_attacking:
                 self.display_grid(self.player_grid, is_player_turn=False)  # Affiche le plateau du joueur
-                self.bot_turn()
+                self.bot_turn_logic()
             elif self.bot_attacked:
                 self.display_grid(self.bot_grid, is_player_turn=True)  # Affiche le plateau du bot
                 self.player_turn_logic()
@@ -907,14 +1015,244 @@ class TrellisManager:
         self.menu()
         return
 
+#########################################################################################
+############################ Mode 1v1 a partir de cette ligne ###########################
+#########################################################################################
+
+
+###########################################################################
+
+    # La communication entre les plateaux et l'ordi/raspberri pi se fera a l'aide d'un protocole
+    # de communication basé sur des messages simples.
+    #
+    # Exemple:
+    #   Depuis le plateau (vers le script maître)
+    #       PLACEMENT:x,y → un bouton a été appuyé
+    #       TIR:x,y → le joueur a tiré ici
+    #       FIN → le joueur a fini
+    #
+    #   Depuis le maître (vers le plateau):
+    #       LED:x,y,color → allumer une LED (color = green/red/blue)
+    #       RESET → reset le plateau
+    #       VICTOIRE → allumer toutes les LED en vert (par exemple)
+    #       GAMEOVER → game over, les LED s'éteignent
+    #       SCORE:x,y,valeur → afficher le score
+    #
+    #
+    # Les fonctions suivante sont là pour decrypter les messages et les envoyés.
+    # lire(plateau): plateau étant le serial du plateau
+    # envoyer(plateau,message): plateau étant le serial du plateau et message le message à envoyer
+
+###########################################################################
+
+
+    def envoyer(self, message):
+        """
+        Essaye d'envoyer le message
+        """
+        try:
+            communication.write((message + "\n").encode())
+        except Exception as exept: # Génère un exeption pour le debug
+            print("Erreur envoi:", exept)
+
+    def lire(self):
+        """
+        Récupère les message
+        """
+        if communication.in_waiting:
+            try:
+                return communication.readline().decode().strip()
+            except Exception as exept:
+                print("Erreur lecture:", exept)
+        return None
+
+    def update_opponent_grid(self, x, y, result):
+        """
+        Met à jour la grille locale de l'adversaire en fonction du résultat du tir pour suivre la partie.
+        x, y : Coordonnées du tir.
+        result : Résultat du tir ("RATE", "TOUCHE", "COULE").
+
+        Logique de la grid SPÉCIFIQUE à l'adversaire:
+        0 = Rien
+        1 = Tir raté
+        2 = Bateau touché
+        3 = Bateau coulé
+
+        """
+        if result == "RATE":
+            self.opponent_grid[x][y] = 1  # Tir raté
+        elif result == "TOUCHE":
+            self.opponent_grid[x][y] = 2  # Bateau touché
+        elif result == "COULE":
+            #A faire la logique des bateaux coulés
+            for ship in self.player_ships:
+                if (x, y) in ship:
+                    for cx, cy in ship:
+                        self.opponent_grid[cx][cy] = 3  # Bateau coulé
+
+    def display_opponent_grid(self):
+        """
+        Affiche l'état de la grille de l'adversaire sur les LEDs.
+        """
+        for y in range(8):
+            for x in range(8):
+                if self.opponent_grid[x][y] == 1:  # Tir raté
+                    self.set_led(x, y, GRAY)
+                elif self.opponent_grid[x][y] == 2:  # Bateau touché
+                    self.set_led(x, y, ORANGE)
+                elif self.opponent_grid[x][y] == 3:  # Bateau coulé
+                    self.set_led(x, y, RED)
+
+    def display_player_grid(self):
+        """
+        Affiche l'état de la grille du joueur sur les LEDs.
+        """
+        for y in range(8):
+            for x in range(8):
+                if self.player_grid[x][y] == 1:  # Tir raté
+                    self.set_led(x, y, GRAY)
+                elif self.player_grid[x][y] == 2:  # Bateau non touché par l'ennemis
+                    self.set_led(x, y, BLUE)
+                elif self.player_grid[x][y] == 3:  # Bateau touché
+                    self.set_led(x, y, ORANGE)
+                # elif self.player_grid[x][y] == 4: # Bateau coulé (dans la théorie ca marche mais au cas ou on le check manuellement en dessous)
+                #     self.set_led(x, y, RED)
+                else:
+                    # Bateaux coulé
+                    for ship in self.player_ships:
+                        if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Si toutes les cases du bateau sont touchées
+                                for sx, sy in ship:
+                                    self.set_led(sx, sy, RED)
+
+    def main2(self):
+        """
+        Mode 1v1
+
+        Logique de la grid:
+        0 = Rien
+        1 = Tir raté
+        2 = Bateau
+        3 = Bateau touché
+        4 = Bateau coulé
+
+        """
+        self.game_running = True
+        self.player_ships = []
+        self.player_grid = [ [0] * 8 for i in range(8)] # Grille joueur
+        self.opponent_grid = [ [0] * 8 for i in range(8)]
+        self.player_sunken_ships = []
+        self.current_player_sunken_ships = []
+
+        # Main loop
+        while self.game_running:
+            cmd = self.lire()
+            if not cmd:
+                continue
+
+            # Placement demandé : retour READY
+            if cmd == "PLACE":
+                self.placement_bateaux()
+                for ship in self.player_ships:
+                    print(f'Bateau du joueur \n {ship}')
+                    for x, y in ship:
+                        self.player_grid[x][y] == 2
+                self.envoyer("READY")
+
+            # Demande de verification d'un tir : retour RESULT + [WIN,TOUCHE,RATE]
+            elif cmd.startswith("TIR:"):
+                _, coord = cmd.split(":")
+                x, y = map(int, coord.split(","))
+                if self.player_grid[x][y] == 2:  # Bateau touché
+                    self.player_grid[x][y] = 3  # Marque comme touché
+                    self.set_led(x, y, ORANGE)
+                    for ship in self.player_ships:
+                        if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Vérifie si le bateau est coulé
+                            for sx, sy in ship:
+                                self.player_grid[sx][sy] = 4  # Marque comme coulé
+                                self.set_led(sx, sy, RED)
+                            self.envoyer("RESULT:COULE")
+                            break
+                        else:
+                            self.envoyer("RESULT:TOUCHE")
+                else:
+                    self.player_grid[x][y] = 1  # Marque comme raté
+                    self.set_led(x, y, GRAY)
+                    self.envoyer("RESULT:RATE")
+
+            # Recupération des resultat du tir réalisé : retour None
+            elif cmd.startswith("RESULT:"):
+                result = cmd.split(":")[1]  # Extrait le résultat ("RATE", "TOUCHE", "COULE")
+                x, y = self.last_shot  # Coordonnées du dernier tir
+                self.update_opponent_grid(x, y, result)  # Met à jour la grille de l'adversaire
+                self.display_opponent_grid()  # Met à jour l'affichage de la grille "Attauant"
+
+            # Demande le tir du joueur : retour TIR:x,y
+            elif cmd == "YOURTURN":
+                print("C'est votre tour !")
+                joueur_a_joue = False
+                tir_joueur = None  # Définit tir_joueur dans l'outer scope
+
+                def handle_player_input(x, y, edge):
+                    """
+                    Callback pour gérer l'entrée du joueur via les boutons NeoTrellis.
+
+                    cf: player_turn_logic(self)
+
+                    """
+                    nonlocal joueur_a_joue, tir_joueur
+                    if edge == NeoTrellis.EDGE_RISING and not joueur_a_joue:  # Si c'est le premier bouton touché
+                        tir_joueur = (x, y)
+                        joueur_a_joue = True
+
+                # Configure les callbacks pour les inputs du joueur
+                for y in range(8):
+                    for x in range(8):
+                        self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
+                        self.trellis.set_callback(x, y, handle_player_input)
+
+                # Attend l'input du joueur
+                while not joueur_a_joue:
+                    self.trellis.sync()
+                    time.sleep(0.01)
+
+                # Gère le tir du joueur
+                x, y = tir_joueur
+                self.last_shot = (x, y)  # Sauvegarde le tir pour traiter le résultat plus tard
+                print(f"Tir envoyé en ({x}, {y})")
+                self.envoyer(f"TIR:{x},{y}")  # Envoie le tir à l'adversaire
+
+
+
+
+
+# Détection au démarrage
+waiting_animation()
+mode = detect_mode()
+
+
+
+if mode == "1v1":
+    print("Mode 1v1 activé (PC/raspberry connecté)\n")
+    communication.write(b"MODE 1v1\n")
+else:
+    print("Mode PVE activé (aucune connexion USB)\n")
+
+
 # Création et initialisation du gestionnaire
 manager = TrellisManager(trellis)
 manager.initialize_board("init")
 manager.menu()
 
-#manager.benchmark(0,1)
 
 # Boucle principale
 while True:
+    # Je travail actuellement sur cette partie de la communication et je perds espoir, gl 06/04
+    """
+    cmd = lire()
+    if cmd:
+        print(f"Commande reçue : {cmd}")  # Débogage
+        if cmd == "TEST":
+            envoyer("OK")
+            print("Réponse envoyée : OK")  # Débogage"""
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)
