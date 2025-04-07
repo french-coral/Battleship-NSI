@@ -731,7 +731,7 @@ class TrellisManager:
                         tir = (next_x, next_y)
                     else:
                         # Si aucune direction valide, repasse en mode aléatoire
-                        self.bot_direction = None
+                        self.bot_direction = ()
                         tir = self.bot_targets.pop(0) if self.bot_targets else None # Continue si il reste des cible spécifique
             else:
                 # Prend une cible parmi celles probables
@@ -739,6 +739,7 @@ class TrellisManager:
         else:
             # Tir aléatoire
             while True:
+
                 tir_x = random.randint(0, 7)
                 tir_y = random.randint(0, 7)
                 if self.player_grid[tir_x][tir_y] not in [1, 3]:  # Évite les cases déjà essayées
@@ -746,6 +747,7 @@ class TrellisManager:
                     break
 
         print('Bot turn ...')
+        print(f'Cases adjacentes à vérifier : {self.bot_targets}')  # Debugging
 
 
         # Vérifie si un bateau est touché
@@ -777,9 +779,9 @@ class TrellisManager:
         ################################################################################################################
 
             print(f'Erreur: aucune cible valide trouvée. Le bot est cassé mais faut pas que ca se sache ;)')
-            self.bot_targets = None
-            self.bot_direction = None
-            self.bot_last_hit = None
+            self.bot_targets = []
+            self.bot_direction = ()
+            self.bot_last_hit = False
             return
 
         x, y = tir
@@ -1247,12 +1249,11 @@ manager.menu()
 # Boucle principale
 while True:
     # Je travail actuellement sur cette partie de la communication et je perds espoir, gl 06/04
-    """
     cmd = lire()
     if cmd:
         print(f"Commande reçue : {cmd}")  # Débogage
         if cmd == "TEST":
             envoyer("OK")
-            print("Réponse envoyée : OK")  # Débogage"""
+            print("Réponse envoyée : OK")  # Débogage
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)
