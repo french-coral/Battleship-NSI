@@ -65,6 +65,7 @@ MAGENTA = (255, 0, 255) # Complétement inutile
 RED = (255, 0, 0) # Tir raté ou placement invalide + animation de loose
 GRAY = (100, 100, 100)  # Gris pour les tirs ratés du bot
 ORANGE = (255, 165, 0)  # Orange pour les tirs qui touchent un bateau
+blink_bots_play = 0.1 # Temps de clignotement des LEDs du bot pour vois où il a tiré
 
 
 #############################################
@@ -162,16 +163,15 @@ def detect_mode():
     #    return "1v1"
 
     if communication:
-        print("En attente de connexion avec le script maître...")
+        """print("En attente de connexion avec le script maître...")
         start_time = time.monotonic()
         waiting_animation()
         while time.monotonic() - start_time < 5:  # Timeout de 5 secondes
             if communication.in_waiting:
                 msg = lire()
                 print(f"Message reçu pendant la détection : {msg}")  # Débogage
-                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence
-                    return "1v1"
-        print("Aucun message reçu. Passage en mode PVE.")
+                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence"""
+        return "1v1"
     return "PVE"
 
 
@@ -215,22 +215,28 @@ class TrellisManager:
     def handle_button_test(self, x, y, edge):
         """
         Gère les appuis sur les boutons
+        Plus c'est le bac à sable du  menu.
         coord: (x,y)
         edge: RISING ou FALLING
         """
         if edge == NeoTrellis.EDGE_RISING:# Button qui remonte
             if self.get_led_status(x, y) == OFF:
-                self.set_led(x, y, BLUE)  # Bleu
+                self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random c bo
             else:
                 self.set_led(x, y, OFF)# Éteint si déjà allumé
 
-    def blink(self,x,y,color,init_color = None):
+    def blink(self,x,y,color,init_color = None, time_blink = 0.05):
         if not init_color: init_color = self.get_led_status(x, y)# Si pas préciser ca prend tout seul
 
-        for i in range(4):
+        repeat = 4 # Blink error placement
+        if time_blink is blink_bots_play:
+            repeat = 2 # Blink tire bot
+
+        for i in range(repeat):
             self.set_led(x,y,color)
-            time.sleep(0.05)
+            time.sleep(time_blink)
             self.set_led(x,y,OFF)
+            time.sleep(time_blink)
 
         self.set_led(x,y,init_color) # Return to original state
 
@@ -332,6 +338,7 @@ class TrellisManager:
         Edit: Sera modifier si déplacer sur raspberry pi.  03/04
               Peut-être pas enfait 06/04
         """
+
         if edge == NeoTrellis.EDGE_RISING:
             if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
                 self.menu_type = 'Solo'
@@ -341,12 +348,15 @@ class TrellisManager:
 
 
             elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
-                self.initialize_board('endGame_Lose')
-                self.menu()
-
-                # self.menu_type = 'Duo'
-                # self.initialize_board("menu")
-                # self.main2()
+                if mode == 'PVE':
+                    self.menu_type = 'Solo'
+                    self.initialize_board('endGame_Lose')
+                    self.menu()
+                else:
+                    self.menu_type = 'Duo'
+                    self.initialize_board("menu")
+                    self.envoyer("DUOREADY")
+                    self.main2()
 
             # if self.menu_type :print(f"Mode sélectionné : {self.menu_type}")
 
@@ -633,11 +643,17 @@ class TrellisManager:
             Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
         """
+        cmd = lire()
+        print("on est là hein")
+        if cmd:
+            print(f"Commande reçue : {cmd}")  # Débogage
+            if cmd == "TEST":
+                envoyer("OK")
+                print("Réponse envoyée : OK")  # Débogage"""
 
         print("Affichage du menu...")
-        # Abandonner pour le moment :(
-        # mode = self.detect_mode()  # Détecte si une communication est établie
-        # print(f"Mode détecté : {mode}")
+        #mode = self.detect_mode()  # Détecte si une communication est établie
+        #print(f"Mode détecté : {mode}")
 
         leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
         if mode == 'PVE':
@@ -655,6 +671,7 @@ class TrellisManager:
                 self.set_led(leds_[i][0],leds_[i][1], BLUE)
                 self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
                 self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
+
 
     def display_grid(self, grid, is_player_turn):
         """
@@ -788,7 +805,7 @@ class TrellisManager:
         if self.player_grid[x][y] == 2:  # 2 = bateau
             print(f'Bot à touché en {(x, y)}')
             self.player_grid[x][y] = 3  # Marque comme touché; 3 = bateau touché
-            self.set_led(x, y, ORANGE)  # Orange pour un tir qui touche
+            self.blink(x, y, ORANGE, ORANGE, blink_bots_play)  # Orange pour un tir qui touche
 
             if not hasattr(self, "bot_direction") or not self.bot_direction:
 
@@ -816,7 +833,7 @@ class TrellisManager:
                     if ship not in self.player_sunken_ships:
                         self.player_sunken_ships.append(ship)
                         for sx, sy in ship:
-                            self.set_led(sx, sy, RED)  # Rouge pour un bateau coulé
+                            self.blink(sx, sy, RED, RED, blink_bots_play)  # Rouge pour un bateau coulé
                         self.bot_last_hit = None  # Réinitialise pour passer en mode aléatoire
                         self.bot_targets = []  # Vide les cibles adjacentes
                         self.bot_direction = None  # Réinitialise la direction
@@ -826,7 +843,7 @@ class TrellisManager:
 
         else:
             self.player_grid[x][y] = 1  # Marque comme raté
-            self.set_led(x, y, GRAY)  # Gris pour un tir raté
+            self.blink(x, y, GRAY, GRAY, blink_bots_play)  # Gris pour un tir raté
             print(f'Raté en {(x, y)}')
 
         # Affiche le plateau du joueur pour visualiser le tir
@@ -1235,7 +1252,7 @@ mode = detect_mode()
 
 if mode == "1v1":
     print("Mode 1v1 activé (PC/raspberry connecté)\n")
-    communication.write(b"MODE 1v1\n")
+    envoyer("Mode 1v1 détecté (Message P1)")
 else:
     print("Mode PVE activé (aucune connexion USB)\n")
 
@@ -1248,12 +1265,13 @@ manager.menu()
 
 # Boucle principale
 while True:
+    """
     # Je travail actuellement sur cette partie de la communication et je perds espoir, gl 06/04
     cmd = lire()
     if cmd:
         print(f"Commande reçue : {cmd}")  # Débogage
         if cmd == "TEST":
             envoyer("OK")
-            print("Réponse envoyée : OK")  # Débogage
+            print("Réponse envoyée : OK")  # Débogage"""
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)

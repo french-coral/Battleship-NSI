@@ -106,16 +106,17 @@ def lire(plateau):
     return None
 
 
+
+
+
+# Test de communication avec le plateau 1 seulement
 envoyer(p1, "TEST")
+time.sleep(0.5)
 response = lire(p1)
 if response:
     print(f"Réponse du plateau : {response}")
 else:
     print("Aucune réponse du plateau.")
-
-"""  
-envoyer(p1, "HELLO")
-time.sleep(0.5)
 
 while True:
     # Phase de placement des bateaux
@@ -149,7 +150,9 @@ while True:
                 print("Le joueur 1 a gagné !")
                 break
 
-# Boucle principale
+
+# Boucle principale du 1v1
+"""
 while True:
     # Phase de placement des bateaux
     envoyer(p1, "PLACE")
