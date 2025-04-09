@@ -1,10 +1,11 @@
 """
 ################################################################################################################
 
-Les commentaires présents le long de ce code ont été corrigé, verifié et clarifié, il se peut qu'un certain "franglais"
+Les commentaires présents le long de ce code n' ont pas été corrigé ou vérifié en détails, il se peut qu'un certain "franglais"
 s'y glisse, je m'en excuse. (c'est pour moi de base)
+De plus certains commentaire sont outdated (si besoin il y a des dates sur certains commentaires)
 
-J'espère être le plus claire possible. Bonne chance.
+J'espère être le plus claire possible. Bonne chance. (vous en aurez besoin)
 En cas de question spécifique et TRES technique demandé à : Noah (il connait bien le code)
 
 ################################################################################################################
@@ -13,34 +14,38 @@ Informations sur le code / jeu :
 - Le jeu est un jeu de 2 joueurs (Bataille Navale).
 - Le plateau est un 8x8.
 - Tour par tour.
+  - Si un joueur (bot ou joueur) touche un bateau il rejoue.
 
 - Chaque joueur a une flotte de 3 navires : Grand => 4 cases / Moyen => 3 cases /Petit => 2 cases
-- Le joueur doit choisir la position de ses navires sur le plateau.  // En developpement
-- Le joueur peut choisir la position des navires (manuel, automatique) // En developpement (on peut espérer)
+- Le joueur doit choisir la position de ses navires sur le plateau.
+  - Si le placement débuté ne convient pas il peut reappuyer sur les cases indésiré ou simplement cliqué ailleurs (qui ne fait pas suite du bateau)
 - Le bot a ses navires positionnés automatiquement sur le plateau.
 
-- Menu avec "Solo" et "Duo" mode.  // vouer à changer
-- Un mode solo est disponible, il est codé sur le plateau directement.
+- Menu avec "Solo" et "Duo" mode.  // D'autres jeu seront peut-être ajoutez
+  - Un mode solo est disponible, il est codé sur le plateau directement.
+  - Le mode duo est disponible seulement si branché à la rapberry (finalité, pour le moment sur le pc, voir main.py)
+  - Le mode duo est disponible seulement si les 2 plateaux sont branchés. (dans la théorie)
 
-- Le mode duo est disponible seulement si les 2 plateaux sont branchés. (dans la théorie)
-
-Fonctionnement du mode 1v1:
+Fonctionnement du mode 1v1 / Duo :
+- Le script maître attent que les 2 plateaux est séléctionnés le mode duo via le menu
 - Le script maître demande au 2 plateaux de placer leur bateaux respectifs : quand c'est fait les 2 renvoire READY
-- Puis le script maître gère simplement le transfert d'information et la logique de tour
-- Le leds , logique de jeu, placement de bateaux, touché coule etc sont gérer respectivement sur chacunes des cartes
-/// Logique en cours de DEV, les plateaux ne se connecte même pas corrrectement pour le moment///. 06/04
+- Puis le script maître gère simplement le transfert d'information et la logique de tour.
+- Les leds , logique de jeu, placement de bateaux, touché coule etc sont gérer respectivement sur chacun des plateaux
+
+- Le transfert de données / infos se fait par l'ouverture des port par leur UID (cd boot_out.txt dans le (E:)CIRCUITPY)
+- Les données / infos passe ensuite par usb_cdc.data (faire la dif avec usb_cdc.console)
+  - Les données sont des chaînes de caractères encodées en 8bits
+- Le plateau ne décode rien de ce sui concerne la partie il fait juste le transfert d'une carte à l'autre.
+
 
 ################################################################################################################
 
 """
 
 import time
-import busio
 import board
 import usb_cdc
-import supervisor
 import random
-import sys
 from adafruit_neotrellis.neotrellis import NeoTrellis
 from adafruit_neotrellis.multitrellis import MultiTrellis
 
@@ -66,6 +71,7 @@ RED = (255, 0, 0) # Tir raté ou placement invalide + animation de loose
 GRAY = (100, 100, 100)  # Gris pour les tirs ratés du bot
 ORANGE = (255, 165, 0)  # Orange pour les tirs qui touchent un bateau
 blink_bots_play = 0.1 # Temps de clignotement des LEDs du bot pour vois où il a tiré
+couleurs_bateaux = [(0, 100, 255), (0, 150, 200), (0, 200, 150)] # Teintes de bleu pour chaque bateau (Request de Noah)
 
 
 #############################################
@@ -126,7 +132,7 @@ else:
 def lire():
     """
     Récupère les messages via USB et les sépare si plusieurs messages sont collés. (pb au deboggage)
-    Il existe un version bien plus simple cependant elle est là pour faire des tests
+    Il existe un version bien plus simple cependant elle est là pour faire des tests (restera peut être à la fin du projet)
 
     """
     if communication is None:
@@ -137,7 +143,7 @@ def lire():
             data = communication.read(communication.in_waiting).decode().strip()
             print(f"Message reçu : {data}")  # Débogage
             return data
-        except Exception as exept:
+        except Exception as exept: # On est plus à ca prêt, on peut espérer ne pas l'itiliser
             print(f"Erreur de lecture : {exept}")
     else:
         print("Aucuns messages en attente.")
@@ -157,23 +163,34 @@ def detect_mode():
     """
     Détecte si le plateau est connecté à un script maître (pc ou raspberry) via USB.
 
-    Edit: Fonction originale vouer à changer. 06/04
+    Edit: - Fonction originale vouer à changer. 06/04
+          - Maintenant seulement basé sur la com usb_cdc.data et non un vrai échange pour être sur de la disponibilité du plateau. 09/04
     """
-    # if supervisor.runtime.serial_connected: # renvoie True : je travail encore dessus
+    # /!/ Si vous utliser cette ligne en dessous n'oubliez pas d'ajouter 'import supervisor' /!/
+    # Alternative en test pour le check de com. renvoie True : je travail encore dessus 
+    # if supervisor.runtime.serial_connected: 
     #    return "1v1"
 
     if communication:
-        """print("En attente de connexion avec le script maître...")
+        """
+        # Le code suivant est l'ancienne manière de check la communication mais je garde just in case. 09/04
+        print("En attente de connexion avec le script maître...")
         start_time = time.monotonic()
         waiting_animation()
         while time.monotonic() - start_time < 5:  # Timeout de 5 secondes
             if communication.in_waiting:
                 msg = lire()
                 print(f"Message reçu pendant la détection : {msg}")  # Débogage
-                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence"""
+                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence
+        """
         return "1v1"
     return "PVE"
 
+#############################################
+
+# Fin d'init du mode de jeu
+
+#############################################
 
 class TrellisManager:
     def __init__(self, trellis):
@@ -190,7 +207,8 @@ class TrellisManager:
 
     def get_led_coordinates(self, led_id):
         """
-        Convertit un ID LED en coordonnées
+        Convertit un ID LED en coordonnées, comme préciser dans get_led_id(), cette fonction à pour but de débug et mapper le tableau,
+        ce n'est pas utilisé.
         coord: (x,y)
         ID: (0-63)
         """
@@ -212,25 +230,27 @@ class TrellisManager:
         """
         return self.led_status[y][x]
 
+
     def handle_button_test(self, x, y, edge):
         """
         Gère les appuis sur les boutons
-        Plus c'est le bac à sable du  menu.
+        Plus c'est le bac à sable du menu. C'est cool, on le garde
         coord: (x,y)
         edge: RISING ou FALLING
         """
         if edge == NeoTrellis.EDGE_RISING:# Button qui remonte
             if self.get_led_status(x, y) == OFF:
-                self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random c bo
+                self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random c bo 
             else:
                 self.set_led(x, y, OFF)# Éteint si déjà allumé
 
     def blink(self,x,y,color,init_color = None, time_blink = 0.05):
-        if not init_color: init_color = self.get_led_status(x, y)# Si pas préciser ca prend tout seul
 
-        repeat = 4 # Blink error placement
+        if not init_color: init_color = self.get_led_status(x, y) # Si pas préciser ca prend tout seul la couleur de base de la touche
+
+        repeat = 4 # Blink error placement (lors du placement des bateaux)
         if time_blink is blink_bots_play:
-            repeat = 2 # Blink tire bot
+            repeat = 2 # Blink tire bot (pour voir distinctment le coup du bot)
 
         for i in range(repeat):
             self.set_led(x,y,color)
@@ -249,7 +269,8 @@ class TrellisManager:
 
         Animations (step):
         - "Menu" = blue / light blue
-        - "endGame" = Green victory animation + multipastel colors clear animation
+        - "endGame_Win" = Green victory animation + multi-pastel colors clear animation
+        - "endGame_Lose" = Red victory animation + multi-pastel colors clear animation
         - "init" = Initialisation du plateau
 
         """
@@ -257,11 +278,11 @@ class TrellisManager:
             couleur_gradient = 5
         elif step == "endGame_Win" or step == "endGame_Lose":
             couleur_gradient = 150
-        else: #Current else : "init"
+        else: # Current else : "init"
             couleur_gradient = 32
 
 
-        if couleur_gradient == 150 :# End animation
+        if couleur_gradient == 150 : # End animation
             if step == "endGame_Win": FIN_COLOR = GREEN
             else: FIN_COLOR = RED
             for r in range(3):
@@ -272,7 +293,7 @@ class TrellisManager:
                     for j in range(8):
                         self.set_led(i, j, OFF)
 
-
+        # Bac à sable du menu, il est un peu perdu mais oklm
         for y in range(8):
             for x in range(8):
                 self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
@@ -285,6 +306,7 @@ class TrellisManager:
 
 
         # Configure le bouton de reset (ne marche visiblement pas donc on va le comment out temporairement)
+        # Marchera probablement jamais. 09/04
         #self.trellis.activate_key(0, 0, NeoTrellis.EDGE_RISING)
         #self.trellis.activate_key(0, 0, NeoTrellis.EDGE_FALLING)
         #self.trellis.set_callback(0, 0, self.benchmark_reset)
@@ -301,7 +323,8 @@ class TrellisManager:
         """
         Fonction de "RESET" : Réinitialise le plateau si un bouton est maintenu plus de 2,5 secondes.
 
-        Edit: Ne marche absolument pas, besoin d'une alternative.  04/04
+        Edit: - Ne marche absolument pas, besoin d'une alternative.  04/04
+              - Débrancher - rebrancher fera l'affaire parce que c'est infaisable comme feature.  09/4
 
         """
         reset_button = (0, 0)  # Coordonnées du bouton de reset
@@ -329,28 +352,70 @@ class TrellisManager:
                     # Réinitialise le plateau et retourne au menu
                     self.initialize_board("init")
                     self.menu()
+    
+    def clear_all_callbacks(self):
+        """
+        Clear all callbacks des bouttons.
 
+        """
+        for y in range(8):
+            for x in range(8):
+                self.trellis.set_callback(x, y, None)
+    
+    def menu(self):
+            """
+                Set les leds et bouttons du menu en fonction du  type de menu
+                Solo: I
+                Duo: I et II (sur le menu)
+
+                Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
+
+            """
+            cmd = lire()
+            if cmd:
+                print(f"Commande reçue : {cmd}")  # Débug
+                if cmd == "TEST":
+                    envoyer("OK")
+                    print("Réponse envoyée : OK")  # Débug : ca marchait le 08/04
+
+            print("Affichage du menu...")
+            mode = self.detect_mode()  # Détecte si une communication est établie
+            print(f"Mode détecté : {mode}")
+
+            leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
+            if mode == 'PVE':
+                for i in range(2):
+                    self.set_led(leds_[i][0],leds_[i][1], BLUE)
+                    self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
+                    self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
+                for n in range(2,6):
+                    self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas dispo donc rouge
+
+            else: # Les 2 modes sont disponibles
+                for i in range(6):
+                    self.set_led(leds_[i][0],leds_[i][1], BLUE)
+                    self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
+                    self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
 
     def handle_menu(self, x, y, edge):
         """
         Gère le choix du menu en fonction du bouton pressé
 
         Edit: Sera modifier si déplacer sur raspberry pi.  03/04
-              Peut-être pas enfait 06/04
+              Peut-être pas enfait. 06/04
         """
 
         if edge == NeoTrellis.EDGE_RISING:
             if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
                 self.menu_type = 'Solo'
                 self.initialize_board("menu")
-                # self.initialize_board("endGame_Lose") #/Debug/ Animation testing purposes
                 self.main1()
 
 
             elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
-                if mode == 'PVE':
+                if mode == 'PVE': # Animation du mode non disponible
                     self.menu_type = 'Solo'
-                    self.initialize_board('endGame_Lose')
+                    self.initialize_board('endGame_Lose') # /Debug/ Animation testing purposes
                     self.menu()
                 else:
                     self.menu_type = 'Duo'
@@ -358,7 +423,13 @@ class TrellisManager:
                     self.envoyer("DUOREADY")
                     self.main2()
 
-            # if self.menu_type :print(f"Mode sélectionné : {self.menu_type}")
+            elif (x, y) == (6, 6):  # Si on appuie sur "KubeKube"
+                self.menu_type = 'KubeKube'
+                self.initialize_board("menu")
+                self.start_kube()
+
+            # if self.menu_type :print(f"Mode sélectionné : {self.menu_type}") # Trop de fonction et de test renvoyaient les mêmes infos
+
 
     #########################################################################################
     ############################ Mode PVE a partir de cette ligne ###########################
@@ -437,14 +508,36 @@ class TrellisManager:
             if edge == NeoTrellis.EDGE_RISING:
                 # Si le joueur appuie sur une case déjà sélectionnée, annule cette case
                 if (x, y) in bateau_en_cours:
+                    # Vérifie si la case supprimée est entre deux autres cases
                     bateau_en_cours.remove((x, y))
                     self.set_led(x, y, OFF)  # Éteint la LED
 
-                    if len(bateau_en_cours) < 2:
-                        direction = None  # Réinitialise la direction si aucune ou une seule case est sélectionnée
+                    # Cas pariculier lors du placement du Grand bateau : je place 3 cases et je supprime celle du milieu, ca fait un bateau fracturé en 2 parties.
+                    if len(bateau_en_cours) >= 2: # Si 3 selectioner (uniquement pour le placement du bateau de 4 de long)
+                        xs = [coord[0] for coord in bateau_en_cours] # xs = [x1,x2,x3]; x des 3 cases séléctionner
+                        ys = [coord[1] for coord in bateau_en_cours] # ys = [y1,y2,y3]; y des 3 cases séléctionner
+
+                        if direction == "Horz" and min(xs) < x < max(xs): # x change si Horz
+                            # Si la case supprimée est entre deux cases en direction horizontale
+                            for bx, by in bateau_en_cours:
+                                self.set_led(bx, by, OFF)
+                            bateau_en_cours = []
+                            direction = None
+                            return
+                        elif direction == "Vert" and min(ys) < y < max(ys): # y change si Vert
+                            # Si la case supprimée est entre deux cases en direction verticale
+                            for bx, by in bateau_en_cours:
+                                self.set_led(bx, by, OFF)
+                            bateau_en_cours = []
+                            direction = None
+                            return
+                        
+                # Réinitialise la direction si aucune ou une seule case est sélectionnée
+                if len(bateau_en_cours) < 2:
+                    direction = None
                     return
 
-
+                # Empêche de placer un bateau sur un autre bateau.
                 for ship in self.player_ships:
                     if (x, y) in ship:
                         self.blink(x, y,RED)
@@ -623,55 +716,11 @@ class TrellisManager:
         while len(self.player_ships) < len(tailles_bateaux):
             self.trellis.sync()
             time.sleep(0.01)
-
-    def clear_all_callbacks(self):
-        """
-        Clear all callbacks des bouttons.
-
-        """
-        for y in range(8):
-            for x in range(8):
-                self.trellis.set_callback(x, y, None)
-
-
-    def menu(self):
-        """
-            Set les leds et bouttons du menu en fonction du  type de menu
-            Solo: I
-            Duo: I et II (sur le menu)
-
-            Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
-
-        """
-        cmd = lire()
-        print("on est là hein")
-        if cmd:
-            print(f"Commande reçue : {cmd}")  # Débogage
-            if cmd == "TEST":
-                envoyer("OK")
-                print("Réponse envoyée : OK")  # Débogage"""
-
-        print("Affichage du menu...")
-        #mode = self.detect_mode()  # Détecte si une communication est établie
-        #print(f"Mode détecté : {mode}")
-
-        leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
-        if mode == 'PVE':
-            for i in range(2):
-                self.set_led(leds_[i][0],leds_[i][1], BLUE)
-                self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
-            for n in range(2,6):
-                self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas dispo donc rouge
-                # Le fait que le mode duo s'active en PVE est pour le deboggage
-                self.trellis.activate_key(leds_[n][0], leds_[n][1], NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(leds_[n][0], leds_[n][1], self.handle_menu)
-        else: # Les 2 modes sont disponibles
-            for i in range(6):
-                self.set_led(leds_[i][0],leds_[i][1], BLUE)
-                self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
-
+        
+        # Applique les teintes de bleu aux bateaux une fois placés
+        for num_bateau, ship in enumerate(self.player_ships): # Enumerate pour récupérer l'index du bateau et mettre de la couleur
+            for gx, gy in ship:
+                self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
 
     def display_grid(self, grid, is_player_turn):
         """
@@ -702,7 +751,10 @@ class TrellisManager:
                     if is_player_turn:
                         self.set_led(x, y, OFF)  # Cacher les bateaux du bot au tour du joueur
                     else:
-                        self.set_led(x, y, BLUE)  # Bleu pour un bateau non touché (uniquement pour player_grid)
+                        # Bleu uniquement sur (player_grid)
+                        for num_bateau, ship in enumerate(self.player_ships): # Enumerate pour récupérer l'index du bateau et mettre de la couleur
+                            for gx, gy in ship:
+                                self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
                 elif grid[x][y] == 1:  # Tir raté
                     self.set_led(x, y, GRAY)  # Gris pour un tir raté
                 else:  # Case vide
@@ -807,6 +859,10 @@ class TrellisManager:
             self.player_grid[x][y] = 3  # Marque comme touché; 3 = bateau touché
             self.blink(x, y, ORANGE, ORANGE, blink_bots_play)  # Orange pour un tir qui touche
 
+            # Le bot rejoue si il touche
+            self.bot_attacked = False
+            self.bot_attacking = True
+
             if not hasattr(self, "bot_direction") or not self.bot_direction:
 
         ########################################################################
@@ -846,6 +902,10 @@ class TrellisManager:
             self.blink(x, y, GRAY, GRAY, blink_bots_play)  # Gris pour un tir raté
             print(f'Raté en {(x, y)}')
 
+            # Le bot à raté c'est au tour du joueur
+            self.bot_attacked = True
+            self.bot_attacking = False
+
         # Affiche le plateau du joueur pour visualiser le tir
         self.display_grid(self.player_grid, is_player_turn=False)
         time.sleep(2)  # Ajoute un délai pour que le joueur puisse voir le (sinon ça pue)
@@ -864,8 +924,6 @@ class TrellisManager:
 
         print('')
         # Fin du tour du bot
-        self.bot_attacking = False
-        self.bot_attacked = True
 
     def player_turn_logic(self):
         """
@@ -912,6 +970,10 @@ class TrellisManager:
             print(f'Joueur à touché en {(x,y)}')
             self.bot_grid[x][y] = 3  # Marque comme touché
             self.set_led(x, y, ORANGE)
+            
+            # Rejoue si touché
+            self.bot_attacked = True
+            self.bot_attacking = False
 
             # Vérifie si le bateau est coulé
             for ship in self.bot_ships:
@@ -923,6 +985,10 @@ class TrellisManager:
             print(f'Raté en {(x,y)}')
             self.bot_grid[x][y] = 1  # Marque comme raté
             self.set_led(x, y, GRAY)  # Gris pour un tir raté
+
+            # Change de tour (raté = tour par tour)
+            self.bot_attacked = False
+            self.bot_attacking = True
         else:
             print("Déjà tiré ici (ouvre tes yeux enfait !)")
 
@@ -941,8 +1007,6 @@ class TrellisManager:
 
         print('')
         time.sleep(2)
-        self.bot_attacked = False
-        self.bot_attacking = True
 
     def main1(self):
         """
@@ -1130,8 +1194,13 @@ class TrellisManager:
             for x in range(8):
                 if self.player_grid[x][y] == 1:  # Tir raté
                     self.set_led(x, y, GRAY)
+                
                 elif self.player_grid[x][y] == 2:  # Bateau non touché par l'ennemis
-                    self.set_led(x, y, BLUE)
+                    # Bleu uniquement sur (player_grid)
+                    for num_bateau, ship in enumerate(self.player_ships): # Enumerate pour récupérer l'index du bateau et mettre de la couleur
+                        for gx, gy in ship:
+                            self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
+                
                 elif self.player_grid[x][y] == 3:  # Bateau touché
                     self.set_led(x, y, ORANGE)
                 # elif self.player_grid[x][y] == 4: # Bateau coulé (dans la théorie ca marche mais au cas ou on le check manuellement en dessous)
@@ -1240,6 +1309,105 @@ class TrellisManager:
                 print(f"Tir envoyé en ({x}, {y})")
                 self.envoyer(f"TIR:{x},{y}")  # Envoie le tir à l'adversaire
 
+#########################################################################################
+############################ Kube Kube à partir de cette ligne ##########################
+#########################################################################################
+
+    def start_kube(self):
+        """
+        Initialise le jeu Kube Kube (c'est complétement du plagiat).
+        Une fonction qui appelle une fonction c'est juste pour le style du menu :)
+        Pour sortir du jeu, faire 3 fautes sur la même case. ( en dev )
+        """
+
+        self.kube_generate_grid()
+
+    def kube_generate_grid(self, kube_level = 1):
+        """
+        Génère la grid avec une couleur de base et une seule case légèrement différenteq qu'il faut cliquer.
+        Retour au menu si loose ou si 3 fois la même erreur au même endroit. (tu peux en théorie pas perdre car pas de time limit)
+        """
+
+        kubegame_active = True 
+        kube_target = ()  # Case cible avec une couleur différente (coord)
+        kube_target_color = () # Kube avec la couleur de teinte diff (couleur)
+        kube_base_color = () # Couleur que prendra la grid
+        error_count = {}  # Compteur d'erreurs par case
+
+
+        def kube_handle_click(self, x, y, edge):
+            """
+            Réagit à un clic pendant le jeu Kube Kube.
+            """
+            nonlocal kube_level, kube_target, kube_base_color, kube_target_color, kubegame_active
+
+            if edge == NeoTrellis.EDGE_RISING:
+                if (x, y) == kube_target:
+                    print("Kube found")
+                    time.sleep(0.3)
+                    kube_level += 1  # Augmente le niveau
+                    self.kube_generate_grid(kube_level)  # Génère une nouvelle grille
+                else:
+                    print("Mauvais kube !")
+                    # Incrémente le compteur d'erreurs pour cette case (chaque case à son compteur)
+                    if (x, y) not in error_count: # N'as pas été cliqué précédement ?
+                        error_count[(x, y)] = [0, kube_level]
+                    else:
+                        if error_count[(x, y)] [1] == kube_level: # Est ce une erreur répeter sur le même niveau ?
+                            error_count[(x, y)] [0] += 1 # Si oui : ajoute un erreur au compte
+                        else:
+                            error_count[(x, y)] = [1, kube_level] # Si non : remet l'erreur à 1 et update le niveau
+
+                    # Vérifie si 3 erreurs ont été faites sur la même case
+                    if error_count[(x, y)] [0] >= 3:
+                        print("3 erreurs sur la même case. Fin du jeu.")
+                        kubegame_active = False
+                        self.menu()  # Retourne au menu
+                        return
+
+
+
+            # Définir une couleur de base (RGB) , de 50 (trop sombre) à 200 (trop proche du blanc)
+            kube_base_color = (
+                random.randint(50, 200),
+                random.randint(50, 200),
+                random.randint(50, 200),
+            )
+
+            # Calculer un delta de couleur selon le niveau, pour être de plus en plus proche de la couleur de base
+            difference = max(5, 60 - kube_level * 3) # Le changement de teinte est toujours de la même diff
+            # En dessous de 5 c'est juste impossible
+
+            # Générer une couleur légèrement différente pour la case à trouver
+            # La différence s'applique sur les 3 composantes Rouge Vert et Bleu
+            # Le min(255,...) évite de dépasser si la diff est trop importante
+            # le max(0,...) évite de sortir si la diff est trop basse
+            dr = max(0, min(255, kube_base_color[0] + random.choice([-difference, difference])))
+            dg = max(0, min(255, kube_base_color[1] + random.choice([-difference, difference])))
+            db = max(0, min(255, kube_base_color[2] + random.choice([-difference, difference])))
+
+            kube_target_color = (dr,dg,db)
+
+            # Choisit une position aléatoire pour la case cible
+            target_x = random.randint(0, 7)
+            target_y = random.randint(0, 7)
+            kube_target = (target_x, target_y)
+
+        # Affichage de la grille
+        for y in range(8):
+            for x in range(8):
+                self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
+                self.trellis.set_callback(x, y, kube_handle_click)
+
+                # Définit la couleur de la grille
+                if (x, y) == kube_target:
+                    self.set_led(x, y, kube_target_color)  # Case cible
+                else:
+                    self.set_led(x, y, kube_base_color)  # Cases normales
+        
+        while kubegame_active:
+            self.trellis.sync()
+            time.sleep(0.01)
 
 
 
@@ -1266,12 +1434,10 @@ manager.menu()
 # Boucle principale
 while True:
     """
-    # Je travail actuellement sur cette partie de la communication et je perds espoir, gl 06/04
-    cmd = lire()
-    if cmd:
-        print(f"Commande reçue : {cmd}")  # Débogage
-        if cmd == "TEST":
-            envoyer("OK")
-            print("Réponse envoyée : OK")  # Débogage"""
+    Boucle principale du plateau. Pricipalement pour le menu et l'init.
+
+    Le debug qui se trouvait ici est maintenant dans menu()
+
+    """
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)

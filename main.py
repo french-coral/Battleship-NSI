@@ -49,9 +49,17 @@ def safe_open(port_name, baud=9600, timeout=1):
     except serial.SerialException as e:
         print(f"Erreur d'ouverture du port {port_name}: {e}")
         return None
-    
+
+
+#---------------------------------DEBUG---------------------------------#
+#
+#  Le temps de debug toute les fonctionalité concernant le plateau_2 seront desactivés,
+#  à comment in si besoin.
+#
+#-----------------------------------------------------------------------#
+
 port_plateau_1 = safe_open(get_port_by_serial("4657A1084E384B53202020522D4316FF")) # UID du plateau 1, voir boot_out.txt dans CIRCUITPY(D:)
-#port_plateau_2 = safe_open(get_port_by_serial("ICIMETTRELUIDDUp2"))
+#port_plateau_2 = safe_open(get_port_by_serial("ICIMETTRELUIDDUPLATEAU2"))
 
 if port_plateau_1:
     p1 = port_plateau_1
@@ -117,6 +125,19 @@ if response:
     print(f"Réponse du plateau : {response}")
 else:
     print("Aucune réponse du plateau.")
+
+while not p1_duo_activated: # and not p2_duo_activated:
+
+    time.sleep(0.1)
+    envoyer(p1, "DUO?")
+    #envoyer(p2, "DUO?") # Plateau 2
+    response_p1 = lire(p1)
+    #response_p2 = lire(p2) # Plateau 2
+    if response_p1 is "YESDUO":
+        p1_duo_activated = True
+    #if response_p2 is "YESDUO":
+        #p2_duo_activated = True
+
 
 while True:
     # Phase de placement des bateaux
