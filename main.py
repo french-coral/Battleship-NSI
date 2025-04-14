@@ -126,6 +126,9 @@ if response:
 else:
     print("Aucune réponse du plateau.")
 
+p1_duo_activated = False
+#p2_duo_activated = False
+
 while not p1_duo_activated: # and not p2_duo_activated:
 
     time.sleep(0.1)

@@ -71,7 +71,7 @@ RED = (255, 0, 0) # Tir raté ou placement invalide + animation de loose
 GRAY = (100, 100, 100)  # Gris pour les tirs ratés du bot
 ORANGE = (255, 165, 0)  # Orange pour les tirs qui touchent un bateau
 blink_bots_play = 0.1 # Temps de clignotement des LEDs du bot pour vois où il a tiré
-couleurs_bateaux = [(0, 100, 255), (0, 150, 200), (0, 200, 150)] # Teintes de bleu pour chaque bateau (Request de Noah)
+couleurs_bateaux = [(0, 0, 255), (0, 128, 255), (0, 255, 255)]  # Bleu foncé, bleu moyen, bleu clair # Teintes de bleu pour chaque bateau (Request de Noah)
 
 
 #############################################
@@ -379,8 +379,11 @@ class TrellisManager:
                     print("Réponse envoyée : OK")  # Débug : ca marchait le 08/04
 
             print("Affichage du menu...")
-            mode = self.detect_mode()  # Détecte si une communication est établie
+            mode = detect_mode()  # Détecte si une communication est établie
             print(f"Mode détecté : {mode}")
+
+            self.trellis.activate_key(6, 6, NeoTrellis.EDGE_RISING)
+            self.trellis.set_callback(6, 6, self.handle_menu)
 
             leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
             if mode == 'PVE':
@@ -423,7 +426,8 @@ class TrellisManager:
                     self.envoyer("DUOREADY")
                     self.main2()
 
-            elif (x, y) == (6, 6):  # Si on appuie sur "KubeKube"
+            elif (x, y) in [(6,6)]:  # Si on appuie sur "KubeKube"
+                print("Mode KubeKube sélectionné")
                 self.menu_type = 'KubeKube'
                 self.initialize_board("menu")
                 self.start_kube()
@@ -499,6 +503,7 @@ class TrellisManager:
         direction = None  # Direction du bateau (None, "Horz", "Vert")
         bateau_actuel = 0  # Index du bateau en cours de placement
 
+
         def handle_placement(x, y, edge):
             """
             Callback pour gérer le placement des bateaux.
@@ -511,6 +516,11 @@ class TrellisManager:
                     # Vérifie si la case supprimée est entre deux autres cases
                     bateau_en_cours.remove((x, y))
                     self.set_led(x, y, OFF)  # Éteint la LED
+
+                    # Réinitialise la direction si aucune ou une seule case est sélectionnée
+                    if len(bateau_en_cours) < 2:
+                        direction = None
+                        return
 
                     # Cas pariculier lors du placement du Grand bateau : je place 3 cases et je supprime celle du milieu, ca fait un bateau fracturé en 2 parties.
                     if len(bateau_en_cours) >= 2: # Si 3 selectioner (uniquement pour le placement du bateau de 4 de long)
@@ -532,10 +542,6 @@ class TrellisManager:
                             direction = None
                             return
                         
-                # Réinitialise la direction si aucune ou une seule case est sélectionnée
-                if len(bateau_en_cours) < 2:
-                    direction = None
-                    return
 
                 # Empêche de placer un bateau sur un autre bateau.
                 for ship in self.player_ships:
@@ -753,8 +759,14 @@ class TrellisManager:
                     else:
                         # Bleu uniquement sur (player_grid)
                         for num_bateau, ship in enumerate(self.player_ships): # Enumerate pour récupérer l'index du bateau et mettre de la couleur
-                            for gx, gy in ship:
-                                self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
+                            if all(grid[gx][gy] == 3 for gx, gy in ship): 
+                                for gx, gy in ship:
+                                    self.set_led(gx, gy, RED)
+                            else:
+                                for gx, gy in ship:
+                                    if grid[gx][gy] == 2: # Si le bateau est touché mais pas coulé
+                                        self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
+                    
                 elif grid[x][y] == 1:  # Tir raté
                     self.set_led(x, y, GRAY)  # Gris pour un tir raté
                 else:  # Case vide
@@ -1328,51 +1340,16 @@ class TrellisManager:
         Retour au menu si loose ou si 3 fois la même erreur au même endroit. (tu peux en théorie pas perdre car pas de time limit)
         """
 
-        kubegame_active = True 
-        kube_target = ()  # Case cible avec une couleur différente (coord)
-        kube_target_color = () # Kube avec la couleur de teinte diff (couleur)
-        kube_base_color = () # Couleur que prendra la grid
-        error_count = {}  # Compteur d'erreurs par case
+        while True:
 
+            kubegame_active = True
+            error_count = {} # Compteur d'erreurs pour chaque case (coord) (x,y) : [erreur, niveau]
 
-        def kube_handle_click(self, x, y, edge):
-            """
-            Réagit à un clic pendant le jeu Kube Kube.
-            """
-            nonlocal kube_level, kube_target, kube_base_color, kube_target_color, kubegame_active
-
-            if edge == NeoTrellis.EDGE_RISING:
-                if (x, y) == kube_target:
-                    print("Kube found")
-                    time.sleep(0.3)
-                    kube_level += 1  # Augmente le niveau
-                    self.kube_generate_grid(kube_level)  # Génère une nouvelle grille
-                else:
-                    print("Mauvais kube !")
-                    # Incrémente le compteur d'erreurs pour cette case (chaque case à son compteur)
-                    if (x, y) not in error_count: # N'as pas été cliqué précédement ?
-                        error_count[(x, y)] = [0, kube_level]
-                    else:
-                        if error_count[(x, y)] [1] == kube_level: # Est ce une erreur répeter sur le même niveau ?
-                            error_count[(x, y)] [0] += 1 # Si oui : ajoute un erreur au compte
-                        else:
-                            error_count[(x, y)] = [1, kube_level] # Si non : remet l'erreur à 1 et update le niveau
-
-                    # Vérifie si 3 erreurs ont été faites sur la même case
-                    if error_count[(x, y)] [0] >= 3:
-                        print("3 erreurs sur la même case. Fin du jeu.")
-                        kubegame_active = False
-                        self.menu()  # Retourne au menu
-                        return
-
-
-
-            # Définir une couleur de base (RGB) , de 50 (trop sombre) à 200 (trop proche du blanc)
             kube_base_color = (
-                random.randint(50, 200),
-                random.randint(50, 200),
-                random.randint(50, 200),
-            )
+                    random.randint(50, 200),
+                    random.randint(50, 200),          # Couleur que prendra la grid pour le premier tour
+                    random.randint(50, 200),
+            ) 
 
             # Calculer un delta de couleur selon le niveau, pour être de plus en plus proche de la couleur de base
             difference = max(5, 60 - kube_level * 3) # Le changement de teinte est toujours de la même diff
@@ -1393,22 +1370,58 @@ class TrellisManager:
             target_y = random.randint(0, 7)
             kube_target = (target_x, target_y)
 
-        # Affichage de la grille
-        for y in range(8):
-            for x in range(8):
-                self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(x, y, kube_handle_click)
 
-                # Définit la couleur de la grille
-                if (x, y) == kube_target:
-                    self.set_led(x, y, kube_target_color)  # Case cible
-                else:
-                    self.set_led(x, y, kube_base_color)  # Cases normales
-        
-        while kubegame_active:
-            self.trellis.sync()
-            time.sleep(0.01)
+            def kube_handle_click(x, y, edge):
+                """
+                Réagit à un clic pendant le jeu Kube Kube.
+                """
+                nonlocal kube_level, kubegame_active
 
+                if edge == NeoTrellis.EDGE_RISING:
+                    if (x, y) == kube_target:
+                        print("Kube found")
+                        time.sleep(0.3)
+                        kube_level += 1  # Augmente le niveau
+                        kubegame_active = False  # Arrête la boucle active pour générer une nouvelle grille
+                    else:
+                        print("Mauvais kube !")
+                        # Incrémente le compteur d'erreurs pour cette case (chaque case à son compteur)
+                        if (x, y) not in error_count: # N'as pas été cliqué précédement ?
+                            error_count[(x, y)] = [0, kube_level]
+                        else:
+                            if error_count[(x, y)] [1] == kube_level: # Est ce une erreur répeter sur le même niveau ?
+                                error_count[(x, y)] [0] += 1 # Si oui : ajoute un erreur au compte
+                            else:
+                                error_count[(x, y)] = [1, kube_level] # Si non : remet l'erreur à 1 et update le niveau
+
+                        # Vérifie si 3 erreurs ont été faites sur la même case
+                        if error_count[(x, y)] [0] >= 3:
+                            print("3 erreurs sur la même case. Fin du jeu.")
+                            kubegame_active = False
+                            self.menu()  # Retourne au menu
+                            return
+
+
+            # Affichage de la grille
+            for y in range(8):
+                for x in range(8):
+                    self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
+                    self.trellis.set_callback(x, y, kube_handle_click)
+
+                    # Définit la couleur de la grille
+                    if (x, y) == kube_target:
+                        self.set_led(x, y, kube_target_color)  # Case cible
+                        print(f"Case cible : {kube_target} en {kube_target_color} sur du {kube_base_color}")
+                    else:
+                        self.set_led(x, y, kube_base_color)  # Cases normales
+            
+            while kubegame_active:
+                self.trellis.sync()
+                time.sleep(0.01)
+            
+            # Si le jeu est terminé (kubegame_active est False), on recommence avec le niveau suivant
+            if not kubegame_active and kube_level > 0:
+                continue
 
 
 
