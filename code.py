@@ -371,12 +371,14 @@ class TrellisManager:
                 Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
             """
+             
             cmd = lire()
             if cmd:
-                print(f"Commande reçue : {cmd}")  # Débug
+                # print(f"Commande reçue : {cmd}")  # Débug
                 if cmd == "TEST":
                     envoyer("OK")
-                    print("Réponse envoyée : OK")  # Débug : ca marchait le 08/04
+                    print("Réponse envoyée : OK")  # Débug : ca marchait le 08/04, ca marche plus le 15/04
+
 
             print("Affichage du menu...")
             mode = detect_mode()  # Détecte si une communication est établie
@@ -399,6 +401,8 @@ class TrellisManager:
                     self.set_led(leds_[i][0],leds_[i][1], BLUE)
                     self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
                     self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
+            
+            
 
     def handle_menu(self, x, y, edge):
         """
@@ -1248,6 +1252,10 @@ class TrellisManager:
             cmd = self.lire()
             if not cmd:
                 continue
+            if cmd == "DUO?":
+                self.envoyer("YESDUO")
+                print("En attente d'un adversaire...")
+                continue
 
             # Placement demandé : retour READY
             if cmd == "PLACE":
@@ -1444,6 +1452,7 @@ manager.initialize_board("init")
 manager.menu()
 
 
+
 # Boucle principale
 while True:
     """
@@ -1452,5 +1461,6 @@ while True:
     Le debug qui se trouvait ici est maintenant dans menu()
 
     """
+
     trellis.sync()  # Met à jour les événements des boutons
     time.sleep(0.005)
