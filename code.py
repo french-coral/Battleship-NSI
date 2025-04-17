@@ -186,6 +186,7 @@ def detect_mode():
         return "1v1"
     return "PVE"
 
+
 #############################################
 
 # Fin d'init du mode de jeu
@@ -402,8 +403,6 @@ class TrellisManager:
                     self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
                     self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
             
-            
-
     def handle_menu(self, x, y, edge):
         """
         Gère le choix du menu en fonction du bouton pressé

@@ -184,28 +184,38 @@ p1_duo_activated = False
 #p2_duo_activated = False
 
 
-while not p1_duo_activated: # and not p2_duo_activated:
+def game_ready(port_plateau_1):#, port_plateau_2):
+    """
+    Attend que les 2 plateaux soit dans le mode duo.
+    """
 
-    time.sleep(0.1)
-    if port_plateau_1:
-        envoyer(port_plateau_1, "DUO?")
-    #if port_plateau_2:
-        #envoyer(port_plateau_2, "DUO?")
+    while not p1_duo_activated: # and not p2_duo_activated:
 
-    if port_plateau_1:
-        response_p1 = lire(port_plateau_1)
-        if response_p1 == "YESDUO":
-            p1_duo_activated = True
+        time.sleep(0.1)
 
-    #if port_plateau_2:
-    #    response_p2 = lire(port_plateau_2)
-    #    if response_p2 == "YESDUO":
-    #        p2_duo_activated = True
+        if port_plateau_1:
+            response_p1 = lire(port_plateau_1)
+            if response_p1 == "DUOREADY":
+                p1_duo_activated = True
 
-print("Mode duo activé pour les deux plateaux.")
+        #if port_plateau_2:
+        #    response_p2 = lire(port_plateau_2)
+        #    if response_p2 == "DUOREADY":
+        #        p2_duo_activated = True
+
+    print("Mode duo activé pour les deux plateaux.\n")
+    print("Demande de placement des plateaux.")
+    start_game(port_plateau_1)#, port_plateau_2)
 
 
-while True:
+def start_game(port_plateau_1):#, port_plateau_2):
+    """
+    Fonction principale pour démarrer le jeu.
+    Placement des bateaux, attente de la préparation des joueurs,
+    """
+
+    global game_running
+
     # Phase de placement des bateaux
     envoyer(port_plateau_1, "PLACE")
     ready1 = False
@@ -214,12 +224,27 @@ while True:
         if cmd1 == "READY":
             ready1 = True
     print("Le joueur est prêt. Début de la partie.")
+    game_running = True
 
-    while True:
+    game_loop(port_plateau_1)#, port_plateau_2)
+
+
+def game_loop(port_plateau_1):#, port_plateau_2):
+    """
+    Boucle principale du jeu.
+    Gère les tours des joueurs, les tirs et les résultats.
+    """
+    
+    global game_running
+    
+    while game_running:
+
         print("\n---- TOUR du Joueur 1 ----")
         envoyer(port_plateau_1, "YOURTURN")
+
         cmd = lire(port_plateau_1)
         if cmd and cmd.startswith("TIR:"):
+
             # Simule une réponse du second plateau
             _, coord = cmd.split(":")
             x, y = map(int, coord.split(","))
@@ -240,7 +265,11 @@ while True:
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
 """
-while True:
+def game_loop(port_plateau_1):#, port_plateau_2):
+    global game_running
+    
+    while game_running:
+
     # Phase de placement des bateaux
     envoyer(p1, "PLACE")
     envoyer(p2, "PLACE")
