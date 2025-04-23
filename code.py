@@ -122,6 +122,7 @@ def wait_for_connection():
 # Set la communication entre le pc et la carte (ne marche pas pour le moment)
 if usb_cdc.data:
     communication = usb_cdc.data
+    communication.write(("Data connected" + "\n").encode())
     print(f"Valeur de communication : {communication}")
     print("Communication USB initialisée.\n")
 else:

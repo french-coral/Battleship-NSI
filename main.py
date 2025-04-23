@@ -1,5 +1,6 @@
 import serial.tools.list_ports
 import time
+import random
 
 ###########################################################################
 
@@ -117,7 +118,6 @@ def detect_devices():
         print(f"Test du port : {port.device}")
         try:
             with serial.Serial(port.device, 9600, timeout=1) as port_serial:
-                envoyer(port_serial, "TEST")
                 time.sleep(0.5)
                 if port_serial.in_waiting:
                     response = lire(port_serial)
@@ -218,8 +218,9 @@ def start_game(port_plateau_1):#, port_plateau_2):
 
     # Phase de placement des bateaux
     envoyer(port_plateau_1, "PLACE")
+    #envoyer(port_plateau_2, "PLACE")
     ready1 = False
-    while not ready1:
+    while not ready1:# and not ready 2:
         cmd1 = lire(port_plateau_1)
         if cmd1 == "READY":
             ready1 = True
@@ -250,8 +251,7 @@ def game_loop(port_plateau_1):#, port_plateau_2):
             x, y = map(int, coord.split(","))
             print(f"Tir reçu en ({x}, {y})")
 
-            # Simule un résultat aléatoire
-            import random
+            # Simule un résultat aléatoire pour le debug
             result = random.choice(["RESULT:RATE", "RESULT:TOUCHE", "RESULT:COULE"])
             print(f"Résultat simulé : {result}")
             envoyer(port_plateau_1, result)
@@ -271,17 +271,17 @@ def game_loop(port_plateau_1):#, port_plateau_2):
     while game_running:
 
     # Phase de placement des bateaux
-    envoyer(p1, "PLACE")
-    envoyer(p2, "PLACE")
+    envoyer(port_plateau_1, "PLACE")
+    envoyer(port_plateau_2, "PLACE")
 
     ready1, ready2 = False, False
     while not (ready1 and ready2):
         if not ready1:
-            cmd1 = lire(p1)
+            cmd1 = lire(port_plateau_1)
             if cmd1 == "READY":
                 ready1 = True
         if not ready2:
-            cmd2 = lire(p2)
+            cmd2 = lire(port_plateau_2)
             if cmd2 == "READY":
                 ready2 = True
     print("Les deux joueurs sont prêts. Début de la partie.")
@@ -299,25 +299,25 @@ def game_loop(port_plateau_1):#, port_plateau_2):
         print(f"\n---- TOUR du {nom[joueur_actuel]} ----") # Styling
 
         if joueur_actuel == 0:
-            envoyer(p1, "YOURTURN")
-            cmd = lire(p1)
+            envoyer(port_plateau_1, "YOURTURN")
+            cmd = lire(port_plateau_1)
             if cmd and cmd.startswith("TIR:"): # Detection de l'arrivée du tir
-                envoyer(p2, cmd)  # Envoie le tir au plateau 2
-                result = lire(p2)
+                envoyer(port_plateau_2, cmd)  # Envoie le tir au plateau 2
+                result = lire(port_plateau_2)
                 if result:
-                    envoyer(p1, result)  # Envoie le résultat au plateau 1
+                    envoyer(port_plateau_1, result)  # Envoie le résultat au plateau 1
                     if result == "RESULT:WIN":
                         print("Le joueur 1 a gagné !")
                         break
             joueur_actuel = 1
         else:
-            envoyer(p2, "YOURTURN")
-            cmd = lire(p2)
+            envoyer(port_plateau_2, "YOURTURN")
+            cmd = lire(port_plateau_2)
             if cmd and cmd.startswith("TIR:"):
-                envoyer(p1, cmd)  # Envoie le tir au plateau 1
-                result = lire(p1)
+                envoyer(port_plateau_1, cmd)  # Envoie le tir au plateau 1
+                result = lire(port_plateau_1)
                 if result:
-                    envoyer(p2, result)  # Envoie le résultat au plateau 2
+                    envoyer(port_plateau_2, result)  # Envoie le résultat au plateau 2
                     if result == "RESULT:WIN":
                         print("Le joueur 2 a gagné !")
                         break
