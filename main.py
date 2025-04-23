@@ -2,6 +2,9 @@ import serial.tools.list_ports
 import time
 import random
 
+connected_ports = {} # UID : serial.Serial object
+
+
 ###########################################################################
 
     # La communication entre les plateaux et l'ordi/raspberri pi se fera a l'aide d'un protocole
@@ -32,6 +35,7 @@ def envoyer(plateau, message):
     try:
         print(f'<<< {message}')  # Débogage
         plateau.write((message + "\n").encode())
+        plateau.flush()
     except Exception as exept:
         print(f'Erreur envoi : {exept}')
 
@@ -53,18 +57,47 @@ def lire(plateau):
 #
 #-----------------------------------------------------------------------#
 
-def get_port_by_serial(target_serial):
+def get_port_by_serial(target_serial, detected_ports = None):
     """
     Récupère les ports qui recoive une UID précise,
     Ici:
     Plateau 1: 4657A1084E384B53202020522D4316FF
     Plateau 2: Unknown
     """
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
+    if not detected_ports:
+        detected_ports = serial.tools.list_ports.comports() # Debug temporaire 23/04
+
+    for port in detected_ports:
         if port.serial_number == target_serial:
             return port.device
     return None
+
+# Handshake PING/OK
+def try_handshake(port_name, baud=9600, timeout=1.5):
+    """
+    Force la communication feather - server pour éviter d'avoir un timing pourri
+    """
+    try:
+        with serial.Serial(port_name, baud, timeout=timeout) as ser:
+            time.sleep(0.5) # laisse la Feather respirer
+
+            ser.reset_input_buffer() # Soit disant plus clean mais ca pete tout
+            ser.reset_output_buffer()
+
+            print("Pinging ...\n")
+            ser.write(b"PING\n")  # Commande bidon qui attend une réponse connue (ok)
+            ser.flush()
+            time.sleep(1)
+
+            # On laisse un peu de marge pour la réponse
+            if ser.in_waiting:
+                response = ser.readline().decode().strip()
+                print(f"Réponse sur {port_name} : {response}                                                                //!//      {response}")
+                if response == "OK":
+                    return True
+    except Exception as e:
+        print(f"[!] Erreur de handshake sur {port_name} : {e}\n")
+    return False
 
 def safe_open(port_name, baud=9600, timeout=1):
     """
@@ -74,11 +107,35 @@ def safe_open(port_name, baud=9600, timeout=1):
     try:
         return serial.Serial(port_name, baud, timeout=timeout)
     except serial.SerialException as e:
-        print(f"Erreur d'ouverture du port {port_name}: {e}")
+        print(f"[!] Port occupé ou erreur sur {port_name} : {e}")
         return None
 
+def check_connections():
+    """
+    Check de manière dynamique si un port est déconnecté, ca évite de relancer le script a chaque fois.
+    """
+    disconnected = []
 
-def detect_devices():
+    for port_name, ser in connected_ports.items():
+        try:
+            # Essaye de lire 1 byte, sans bloquer (timeout déjà défini)
+            test = ser.read(1)
+            if test == b'':  # Ça peut aussi être signe de port fermé (EOF)
+                pass  # Pas une erreur
+        except (serial.SerialException, OSError) as e:
+            print(f"\n[X] Plateau déconnecté ({port_name}) : {e}")
+            disconnected.append(port_name)
+
+    for port_name in disconnected: # Retire le port proprement de là où il était (si on le rebranche y'a pas de problème)
+        ser = connected_ports[port_name]
+        try:
+            ser.close()
+        except:
+            pass
+        del connected_ports[port_name]
+        print(f"[~] Port {port_name} nettoyé et retiré.\n")
+
+def detect_devices(baud=9600, timeout=1):
     """
     Détecte les ports disponibles et assigne les ports aux plateaux en fonction de leur UID.
     Pour le moment, le code est configuré pour fonctionner avec un seul plateau (plateau_1).
@@ -93,8 +150,7 @@ def detect_devices():
     Produit         : None
     Numéro de série : 4657A1084E384B53202020522D4316FF (c'est celle du plateau_1)
     ----------
-    """
-    """
+   
     # UID des plateaux
     uid_plateau_1 = "4657A1084E384B53202020522D4316FF"  # UID du plateau 1
     #uid_plateau_2 = "ICIMETTRELUIDDUPLATEAU2"  # UID du plateau 2 (à remplacer par le vrai UID)
@@ -105,7 +161,19 @@ def detect_devices():
     """
 
     ports = serial.tools.list_ports.comports()
+    new_feathers = []
+    
     for port in ports:
+         # Skip les ports Bluetooth connus (ils ouvrent mais n'envoie rien c'est chiant)
+        if "Bluetooth" in port.description or "Bluetooth" in port.device:
+            print(f"[IGNORÉ] Port Bluetooth détecté : {port.device}\n")
+            continue
+        
+        #Skip les ports déjà connectés (c plus bo pour la console)
+        if port.device in connected_ports:
+            print(f"[IGNORÉ] Port déjà connecté : {port.device}\n")
+            continue
+            
         print("----------")
         print(f"Nom du port     : {port.device}")
         print(f"Description     : {port.description}")
@@ -114,52 +182,35 @@ def detect_devices():
         print(f"Numéro de série / UID : {port.serial_number}")
         print("----------")
 
-        # Teste si le port est ouvert et peut communiquer eviter la diff entre console et usb_cdc.data
-        print(f"Test du port : {port.device}")
-        try:
-            with serial.Serial(port.device, 9600, timeout=1) as port_serial:
-                time.sleep(0.5)
-                if port_serial.in_waiting:
-                    response = lire(port_serial)
-                    print(f"Réponse reçue sur {port.device} : {response}")
+        port_id = port.device
+        if port_id not in connected_ports:
 
-                    """
-                    # Vérifie l'UID pour assigner les ports
-                    if port.serial_number == uid_plateau_1:
-                        print(f"Plateau 1 détecté sur le port {port.device}")
-                        port_plateau_1 = safe_open(port.device)
+            # Teste si le port est ouvert et peut communiquer eviter la diff entre console et usb_cdc.data
+            print(f"Test du port : {port_id}")
+            if try_handshake(port_id):
+                ser = safe_open(port_id)
+                if ser:
+                    connected_ports[port_id] = ser
+                    print(f"[✓] Plateau connecté sur {port_id}")
+                    new_feathers.append(ser)
 
-                    #elif port.serial_number == uid_plateau_2:
-                    #    print(f"Plateau 2 détecté sur le port {port.device}")
-                    #    port_plateau_2 = safe_open(port.device)
+    return new_feathers
 
-                    """
-
-                    return port.device
-                
-        except Exception as exept:
-            print(f"Erreur avec le port {port.device} : {exept}")
-            print("Le port est peut-être déjà utilisé. (console)\n")
-    
     
 
-    return None
+"""ports = detect_devices()
+if ports:
+    port1 = safe_open(ports[0])
+    port2 = safe_open(ports[1]) if len(ports) > 1 else None
+"""
+port1 = None
+port2 = None
 
 
-
-
+""" 
 # Test automatique des ports
-port_detected = detect_devices()
-
-if port_detected:
-    print(f"Port fonctionnel détecté : {port_detected}")
-else:
-    print("Aucun port fonctionnel détecté.")
-
-
-# Test automatique des ports
-port_detected_1 = get_port_by_serial("4657A1084E384B53202020522D4316FF")  # UID du plateau 1
-#port_detected_2 = get_port_by_serial("ICIMETTRELUIDDUPLATEAU2")  # UID du plateau 2 (à remplacer par le vrai UID)
+port_detected_1 = get_port_by_serial("4657A1084E384B53202020522D4316FF",ports)  # UID du plateau 1
+#port_detected_2 = get_port_by_serial("ICIMETTRELUIDDUPLATEAU2",ports)  # UID du plateau 2 (à remplacer par le vrai UID)
 
 port_plateau_1 = safe_open(port_detected_1) if port_detected_1 else None
 #port_plateau_2 = safe_open(port_detected_2) if port_detected_2 else None
@@ -175,19 +226,16 @@ else:
     #print("Plateau 2 non détecté.")
     
 time.sleep(2)
+"""
 
-
-
-
-
-p1_duo_activated = False
-#p2_duo_activated = False
 
 
 def game_ready(port_plateau_1):#, port_plateau_2):
     """
     Attend que les 2 plateaux soit dans le mode duo.
     """
+    p1_duo_activated = False
+    #p2_duo_activated = False
 
     while not p1_duo_activated: # and not p2_duo_activated:
 
@@ -264,64 +312,23 @@ def game_loop(port_plateau_1):#, port_plateau_2):
 
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
-"""
-def game_loop(port_plateau_1):#, port_plateau_2):
-    global game_running
-    
-    while game_running:
-
-    # Phase de placement des bateaux
-    envoyer(port_plateau_1, "PLACE")
-    envoyer(port_plateau_2, "PLACE")
-
-    ready1, ready2 = False, False
-    while not (ready1 and ready2):
-        if not ready1:
-            cmd1 = lire(port_plateau_1)
-            if cmd1 == "READY":
-                ready1 = True
-        if not ready2:
-            cmd2 = lire(port_plateau_2)
-            if cmd2 == "READY":
-                ready2 = True
-    print("Les deux joueurs sont prêts. Début de la partie.")
-
-    nom = ['Joueur 1','Joueur 2']
-    joueur_actuel = 0
-
-    while True:
-        
-       # Boucle principale du jeu.
-       # Pour le moment test solo.
+# Voir github commit du 04/23/25
 
 
-        
-        print(f"\n---- TOUR du {nom[joueur_actuel]} ----") # Styling
+while True:
 
-        if joueur_actuel == 0:
-            envoyer(port_plateau_1, "YOURTURN")
-            cmd = lire(port_plateau_1)
-            if cmd and cmd.startswith("TIR:"): # Detection de l'arrivée du tir
-                envoyer(port_plateau_2, cmd)  # Envoie le tir au plateau 2
-                result = lire(port_plateau_2)
-                if result:
-                    envoyer(port_plateau_1, result)  # Envoie le résultat au plateau 1
-                    if result == "RESULT:WIN":
-                        print("Le joueur 1 a gagné !")
-                        break
-            joueur_actuel = 1
-        else:
-            envoyer(port_plateau_2, "YOURTURN")
-            cmd = lire(port_plateau_2)
-            if cmd and cmd.startswith("TIR:"):
-                envoyer(port_plateau_1, cmd)  # Envoie le tir au plateau 1
-                result = lire(port_plateau_1)
-                if result:
-                    envoyer(port_plateau_2, result)  # Envoie le résultat au plateau 2
-                    if result == "RESULT:WIN":
-                        print("Le joueur 2 a gagné !")
-                        break
-            joueur_actuel = 0
+    check_connections() # Check si y'as pas un plateau qui se barre
+    detect_devices() # Détecte les nouveau plateau avant de commencé la partie
 
-        print("Partie terminée.")
-        break"""
+    if len(connected_ports) == 1:
+        print("[1] Un seul plateau détecté. En attente du second...\n")
+
+    if len(connected_ports) >= 2:
+        ports_list = list(connected_ports.values())
+        print("[2] Deux plateaux connectés ! Lancement de la partie...\n")
+
+   
+        game_ready(ports_list[0], ports_list[1])
+       
+
+    time.sleep(2)

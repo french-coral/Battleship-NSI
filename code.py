@@ -76,14 +76,14 @@ couleurs_bateaux = [(0, 0, 255), (0, 128, 255), (0, 255, 255)]  # Bleu foncé, b
 
 #############################################
 
-# Les fonctions suivantes sont à usage unique, seulement pour set up le mode PVE ou 1V1
+# Les fonctions suivantes sont à usage unique pour l'init de connection, seulement pour set up le mode PVE ou 1V1
 
 #############################################
 
 
 def waiting_animation():
     """
-    J'étais déprimer que le 1v1 marchait pas, je me suis fait plaisirs, voila
+    Toujours maintenir l'attention
     """
     for i in range(2):
         trellis.color(3, 3, GREEN)
@@ -101,7 +101,7 @@ def waiting_animation():
     trellis.color(3, 4, OFF)
 
 
-# Serial
+# Serial / absolument useless mtn 23/04
 def wait_for_connection():
     """
     Attend l'arrivée de la connection
@@ -119,53 +119,14 @@ def wait_for_connection():
             return
         time.sleep(0.3)
 
-# Set la communication entre le pc et la carte (ne marche pas pour le moment)
-if usb_cdc.data:
-    communication = usb_cdc.data
-    communication.write(("Data connected" + "\n").encode())
-    print(f"Valeur de communication : {communication}")
-    print("Communication USB initialisée.\n")
-else:
-    communication = None
-    print("Erreur : usb_cdc.data is None. Aucune communication USB disponible.")
-
-
-def lire():
-    """
-    Récupère les messages via USB et les sépare si plusieurs messages sont collés. (pb au deboggage)
-    Il existe un version bien plus simple cependant elle est là pour faire des tests (restera peut être à la fin du projet)
-
-    """
-    if communication is None:
-        print("Erreur : communication est None.")
-        return None
-    if communication.in_waiting:
-        try:
-            data = communication.read(communication.in_waiting).decode().strip()
-            print(f"Message reçu : {data}")  # Débogage
-            return data
-        except Exception as exept: # On est plus à ca prêt, on peut espérer ne pas l'itiliser
-            print(f"Erreur de lecture : {exept}")
-    else:
-        print("Aucuns messages en attente.")
-    return None
-
-def envoyer(message):
-    """
-    Envoie un message via USB.
-    """
-    try:
-        print(f"Message envoyé : {message}")  # Débogage
-        communication.write((message + "\n").encode())
-    except Exception as exept:
-        print(f"Erreur d'envoi : {exept}")
-
-def detect_mode():
+def detect_mode(): #Fonction ne sert nul part mais quand je l'enlève ca casse, donc ca reste là pour le moment
     """
     Détecte si le plateau est connecté à un script maître (pc ou raspberry) via USB.
 
     Edit: - Fonction originale vouer à changer. 06/04
           - Maintenant seulement basé sur la com usb_cdc.data et non un vrai échange pour être sur de la disponibilité du plateau. 09/04
+          - Enfait usb_cdc.data EST ouvert c'est juste que y'as pas forcement quelqu'un qui y accède, en gros ca check juste si le plateau est branché en USB
+            si le mode PVE s'active c'est que c'est vraiment la merde, gl. 23/04
     """
     # /!/ Si vous utliser cette ligne en dessous n'oubliez pas d'ajouter 'import supervisor' /!/
     # Alternative en test pour le check de com. renvoie True : je travail encore dessus 
@@ -173,20 +134,47 @@ def detect_mode():
     #    return "1v1"
 
     if communication:
-        """
-        # Le code suivant est l'ancienne manière de check la communication mais je garde just in case. 09/04
-        print("En attente de connexion avec le script maître...")
-        start_time = time.monotonic()
-        waiting_animation()
-        while time.monotonic() - start_time < 5:  # Timeout de 5 secondes
-            if communication.in_waiting:
-                msg = lire()
-                print(f"Message reçu pendant la détection : {msg}")  # Débogage
-                if msg == "HELLO":  # Le script maître envoie "HELLO" pour signaler sa présence
-        """
+        
         return "1v1"
     return "PVE"
 
+
+communication = usb_cdc.data
+
+def lire():
+    """
+    Récupère les messages via USB et les sépare si plusieurs messages sont collés. (pb au deboggage)
+    Il existe un version bien plus simple cependant elle est là pour faire des tests (restera peut être à la fin du projet)
+    """
+    if communication.in_waiting:
+        try:
+            return communication.readline().decode().strip()
+        except Exception as exept:
+            print(f"Erreur lecture : {exept}")
+    return None
+
+def envoyer(message):
+    """
+    Envoie un message via USB.
+    """
+    try:
+        communication.write((message + "\n").encode())
+        communication.flush()
+    except Exception as e:
+        print("Erreur d'envoi :", e)
+
+
+def attendre_handshake():
+    """
+    Attente du handshake pour initialisé la communication feather-server
+    """
+    print("En attente d'un PING pour initialisation...")
+    while True:
+        cmd = lire()
+        if cmd == "PING":
+            envoyer("OK")
+            print("Réponse envoyée : OK")
+            return
 
 #############################################
 
@@ -245,6 +233,7 @@ class TrellisManager:
                 self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random c bo 
             else:
                 self.set_led(x, y, OFF)# Éteint si déjà allumé
+            envoyer('OK')
 
     def blink(self,x,y,color,init_color = None, time_blink = 0.05):
 
@@ -373,13 +362,7 @@ class TrellisManager:
                 Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
             """
-             
-            cmd = lire()
-            if cmd:
-                # print(f"Commande reçue : {cmd}")  # Débug
-                if cmd == "TEST":
-                    envoyer("OK")
-                    print("Réponse envoyée : OK")  # Débug : ca marchait le 08/04, ca marche plus le 15/04
+            attendre_handshake()
 
 
             print("Affichage du menu...")
@@ -1126,11 +1109,11 @@ class TrellisManager:
     #
     # Exemple:
     #   Depuis le plateau (vers le script maître)
-    #       PLACEMENT:x,y → un bouton a été appuyé
+    #       PLACEMENT:x,y → un bouton a été appuyé                 (n'a pas été retenu)
     #       TIR:x,y → le joueur a tiré ici
     #       FIN → le joueur a fini
     #
-    #   Depuis le maître (vers le plateau):
+    #   Depuis le maître (vers le plateau):                                            (aucun des exemples n'est utilisé mais vous avez compris le principe)
     #       LED:x,y,color → allumer une LED (color = green/red/blue)
     #       RESET → reset le plateau
     #       VICTOIRE → allumer toutes les LED en vert (par exemple)
@@ -1139,8 +1122,8 @@ class TrellisManager:
     #
     #
     # Les fonctions suivante sont là pour decrypter les messages et les envoyés.
-    # lire(plateau): plateau étant le serial du plateau
-    # envoyer(plateau,message): plateau étant le serial du plateau et message le message à envoyer
+    # lire(plateau): plateau étant le port serial du plateau
+    # envoyer(plateau,message): plateau étant le port serial du plateau et message le message à envoyer
 
 ###########################################################################
 
@@ -1333,6 +1316,18 @@ class TrellisManager:
 ############################ Kube Kube à partir de cette ligne ##########################
 #########################################################################################
 
+###########################################################################
+
+    # Le jeu ne marche pas bien et c'est pas possible d'en sortir sans débrancher - rebrancher
+    # autrement dit c'est pété, et claqué au sol. 
+    #
+    # C'était plus une sidequest, 
+    # néanmoins ca a le mérite d'exister
+    # pout activer le jeu il faut appuyer en bas à droite en coordonnées (7,7) (si on se place sur du 8,8). hf
+
+###########################################################################
+
+
     def start_kube(self):
         """
         Initialise le jeu Kube Kube (c'est complétement du plagiat).
@@ -1441,7 +1436,6 @@ mode = detect_mode()
 
 if mode == "1v1":
     print("Mode 1v1 activé (PC/raspberry connecté)\n")
-    envoyer("Mode 1v1 détecté (Message P1)")
 else:
     print("Mode PVE activé (aucune connexion USB)\n")
 
