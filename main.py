@@ -79,7 +79,7 @@ def try_handshake(port_name, baud=9600, timeout=1.5):
     """
     try:
         with serial.Serial(port_name, baud, timeout=timeout) as ser:
-            time.sleep(0.5) # laisse la Feather respirer
+            time.sleep(0.6) # laisse la Feather respirer
 
             ser.reset_input_buffer() # Soit disant plus clean mais ca pete tout
             ser.reset_output_buffer()
@@ -94,6 +94,7 @@ def try_handshake(port_name, baud=9600, timeout=1.5):
                 response = ser.readline().decode().strip()
                 print(f"Réponse sur {port_name} : {response}                                                                //!//      {response}")
                 if response == "OK":
+                    ser.write(b"RECEIVED\n")
                     return True
     except Exception as e:
         print(f"[!] Erreur de handshake sur {port_name} : {e}\n")

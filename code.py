@@ -169,12 +169,22 @@ def attendre_handshake():
     Attente du handshake pour initialisé la communication feather-server
     """
     print("En attente d'un PING pour initialisation...")
+
+    communication.reset_input_buffer()
+        
     while True:
         cmd = lire()
         if cmd == "PING":
+            print(f">>> {cmd}")
             envoyer("OK")
             print("Réponse envoyée : OK")
-            return
+            print("Waiting for recepetion ...")
+            
+        elif cmd == "RECEIVED":
+            print(f">>> {cmd}")
+            print("Réponse reçue, handshake terminé. Init et tout le blabla")
+            break
+    return
 
 #############################################
 
@@ -1432,12 +1442,10 @@ class TrellisManager:
 waiting_animation()
 mode = detect_mode()
 
-
-
 if mode == "1v1":
-    print("Mode 1v1 activé (PC/raspberry connecté)\n")
+    print("Communication usb_cdc.data ouverte\n")
 else:
-    print("Mode PVE activé (aucune connexion USB)\n")
+    print("Mode PVE activé (aucune connexion USB / bus_usb_cdc check boot.py)\n")
 
 
 # Création et initialisation du gestionnaire
