@@ -204,7 +204,7 @@ def game_ready(port_plateau_1, port_plateau_2):
     p1_duo_activated = False
     p2_duo_activated = False
 
-    while not p1_duo_activated and not p2_duo_activated:
+    while not p1_duo_activated or not p2_duo_activated:
 
         time.sleep(0.1)
 
@@ -213,12 +213,19 @@ def game_ready(port_plateau_1, port_plateau_2):
                 response_p1 = lire(port_plateau_1)
                 if response_p1 == "DUOREADY":
                     p1_duo_activated = True
+                elif response_p1 == "WENT_SOLO": # Si un plateau va solo l'autre risque d'être bloqué sur le mode duo
+                    print(f"Plateau 1 Went Solo")
+                    envoyer(port_plateau_2,"DUO_OFF")
+
 
         if not p2_duo_activated:
             if port_plateau_2:
                 response_p2 = lire(port_plateau_2)
                 if response_p2 == "DUOREADY":
                     p2_duo_activated = True
+                elif response_p2 == "WENT_SOLO":
+                    print(f"Plateau 2 Went Solo")
+                    envoyer(port_plateau_1,"DUO_OFF")
 
     print("Mode duo activé pour les deux plateaux.\n")
     print("Demande de placement des plateaux.\n")
@@ -240,31 +247,95 @@ def start_game(port_plateau_1, port_plateau_2):
     # Attente du placement des 2 plateaux
     ready1 = False
     ready2 = False
+    boats1 = None
+    boats2 = None
 
-    while not ready1 and not ready2:
+    print("[INFO] Phase de placement démarrée.")
 
+    while not (ready1 and ready2 and boats1 and boats2):
+        # Lecture plateau 1
         cmd1 = lire(port_plateau_1)
-        if cmd1 == "READY":
-            ready1 = True
-            print("Le joueur 1 est prêt.")
-        
-        cmd2 = lire(port_plateau_2)
-        if cmd2 == "READY":
-            ready2 = True
-            print("Le joueur 2 est prêt.")
-            
-    print("Les 2 joueurs sont prêt.\n [⇆] Début de la partie.")
-    game_running = True
+        if cmd1:
+            if cmd1 == "READY":
+                ready1 = True
+                print("[✓] Joueur 1 prêt.")
+            elif cmd1.startswith("BOATS:"):
+                boats1 = cmd1
+                print("[INFO] Bateaux du joueur 1 reçus.")
 
+        # Lecture plateau 2
+        cmd2 = lire(port_plateau_2)
+        if cmd2:
+            if cmd2 == "READY":
+                ready2 = True
+                print("[✓] Joueur 2 prêt.")
+            elif cmd2.startswith("BOATS:"):
+                boats2 = cmd2
+                print("[INFO] Bateaux du joueur 2 reçus.")
+
+        time.sleep(0.05)  # Petite pause pour ne pas surcharger la CPU inutilement
+
+    print("[INFO] Les deux joueurs sont prêts et les bateaux sont reçus.")
+    
+    # Une fois les deux prêts et les bateaux récupérés :
+    envoyer(port_plateau_1, boats2)  # J1 reçoit les bateaux de J2
+    envoyer(port_plateau_2, boats1)  # J2 reçoit les bateaux de J1
+    print("[✓] Bateaux envoyés aux deux joueurs.")
+
+    time.sleep(0.5)  # Le temps que les messages arrivent tranquillement
+
+    game_running = True
     game_loop(port_plateau_1, port_plateau_2)
 
-
 def game_loop(port_plateau_1, port_plateau_2):
-    pass
-    
+
+    nom = ['Joueur 1', 'Joueur 2']
+    joueur_actuel = 0
+
+    def attendre_reponse(port):
+        """
+        Attend indéfiniment une réponse du joueur.
+        """
+        while True:
+            cmd = lire(port)
+            if cmd:
+                return cmd
+            time.sleep(0.1)  # petite pause pour ne pas surcharger le CPU
+
+    while True:
+        print(f"\n---- TOUR du {nom[joueur_actuel]} ----")
+
+        if joueur_actuel == 0:
+            envoyer(port_plateau_1, "YOURTURN")
+            cmd = attendre_reponse(port_plateau_1)
+
+            if cmd.startswith("TIR:"): # On envoie le tir réalisé pour avoir une réponse.
+                envoyer(port_plateau_2, cmd)
+            
+            elif cmd == "WIN":
+                print("WIN du joueur 1")
+                break
+
+            joueur_actuel = 1
+
+        else:
+            envoyer(port_plateau_2, "YOURTURN")
+            cmd = attendre_reponse(port_plateau_2)
+
+            if cmd.startswith("TIR:"):
+                envoyer(port_plateau_1, cmd)
+
+            elif cmd == "WIN":
+                print("WIN du joueur 2")
+                break
+
+            joueur_actuel = 0
+
+    print("Partie terminée.")
+
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
-# Voir github commit du 04/23/25
+# Voir github commit du 23/04/25
 
     
 #Set up les ports
@@ -281,7 +352,7 @@ while True:
 
     if len(connected_ports) >= 2:
         ports_list = list(connected_ports.values())
-        print("[2] Deux plateaux connectés !\n")
+        print("[2] Deux plateaux connectés !\n") # peut apparaître légèrement en retard car il fini son analyse complète de tout les ports avant d'arriver là
 
    
         game_ready(ports_list[0], ports_list[1])

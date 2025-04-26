@@ -1,3 +1,18 @@
+
+# Si vous voulez retirez l'état du jeu dans le terminal:
+#    0 0 0 0 0 0 0 0 
+#    0 0 1 0 0 0 0 0 
+#    0 0 2 2 0 0 0 0 
+#    0 0 3 3 3 0 0 0 
+#    0 0 0 0 0 0 0 0 
+#    0 0 0 0 0 0 1 0 
+#    1 0 0 0 0 0 0 0
+#    0 0 0 0 0 0 0 0
+# Changer la variable suivante a False
+is_grid_on = True
+
+
+
 """
 ################################################################################################################
 
@@ -152,6 +167,16 @@ def lire():
         except Exception as exept:
             print(f"Erreur lecture : {exept}")
     return None
+
+def wait_for_cmd(timeout = 1):
+
+    start = time.time()
+    while time.time() - start < timeout:
+        cmd = lire()
+        if cmd:
+            return cmd
+        time.sleep(0.1)  # petite pause pour éviter de surcharger le CPU
+    return None  # Timeout atteint sans réponse
 
 def envoyer(message):
     """
@@ -370,7 +395,7 @@ class TrellisManager:
             for x in range(8):
                 self.trellis.set_callback(x, y, None)
     
-    def menu(self):
+    def menu(self, NeedHandshake = "with_handshake"):
             """
                 Set les leds et bouttons du menu en fonction du  type de menu
                 Solo: I
@@ -379,7 +404,10 @@ class TrellisManager:
                 Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
             """
-            mode = attendre_handshake()
+            if NeedHandshake == "with_handshake": # Pour le sénario un plateau fait du solo alors que les 2 étaient connectés
+                mode = attendre_handshake()
+            else:
+                mode = "PVE"
 
 
             print("Affichage du menu...")
@@ -396,6 +424,8 @@ class TrellisManager:
                     self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
                 for n in range(2,6):
                     self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas dispo donc rouge
+                    self.trellis.activate_key(leds_[n][0], leds_[n][1], NeoTrellis.EDGE_RISING)
+                    self.trellis.set_callback(leds_[n][0], leds_[n][1], self.blink)
 
             else: # Les 2 modes sont disponibles
                 for i in range(6):
@@ -414,20 +444,28 @@ class TrellisManager:
         if edge == NeoTrellis.EDGE_RISING:
             if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
                 self.menu_type = 'Solo'
+                self.envoyer("WENT_SOLO")
+                print(">>> WENT_SOLO")
                 self.initialize_board("menu")
                 self.main1()
 
 
             elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
-                if mode == 'PVE': # Animation du mode non disponible
+                if mode == 'PVE': # Animation du mode non disponible car n'éxiste juste pas
                     self.menu_type = 'Solo'
                     self.initialize_board('endGame_Lose') # /Debug/ Animation testing purposes
+                    self.envoyer("WENT_SOLO")
+                    print(">>> WENT_SOLO")
                     self.menu()
                 else:
                     self.menu_type = 'Duo'
-                    self.initialize_board("menu")
-                    self.envoyer("DUOREADY")
-                    self.main2()
+                    if wait_for_cmd(2) == "DUO_OFF":
+                        mode == "PVE"
+                        self.menu("with_no_handshake")
+                    else:
+                        self.initialize_board("menu")
+                        self.envoyer("DUOREADY")
+                        self.main2()
 
             elif (x, y) in [(6,6)]:  # Si on appuie sur "KubeKube"
                 print("Mode KubeKube sélectionné")
@@ -1164,7 +1202,7 @@ class TrellisManager:
                 print("Erreur lecture:", exept)
         return None
 
-    def update_opponent_grid(self, x, y, result):
+    def update_opponent_grid(self, x, y):
         """
         Met à jour la grille locale de l'adversaire en fonction du résultat du tir pour suivre la partie.
         x, y : Coordonnées du tir.
@@ -1177,16 +1215,21 @@ class TrellisManager:
         3 = Bateau coulé
 
         """
-        if result == "RATE":
-            self.opponent_grid[x][y] = 1  # Tir raté
-        elif result == "TOUCHE":
-            self.opponent_grid[x][y] = 2  # Bateau touché
-        elif result == "COULE":
-            #A faire la logique des bateaux coulés
-            for ship in self.player_ships:
-                if (x, y) in ship:
-                    for cx, cy in ship:
-                        self.opponent_grid[cx][cy] = 3  # Bateau coulé
+        for ship in self.opponent_boats:
+            if (x, y) in ship:
+                # Marque la case touchée
+                self.opponent_grid[x][y] = 2  # Touché (Orange)
+
+                # Vérifie si tout le bateau est coulé
+                coule = all(self.opponent_grid[sx][sy] == 2 for sx, sy in ship)
+                if coule:
+                    for sx, sy in ship:
+                        self.opponent_grid[sx][sy] = 3  # Coulé (Rouge)
+                return  # On a trouvé la bonne cible
+
+        # Si pas dans un bateau → Tir raté
+        self.opponent_grid[x][y] = 1  # Tir raté (Gris)
+
 
     def display_opponent_grid(self):
         """
@@ -1194,12 +1237,32 @@ class TrellisManager:
         """
         for y in range(8):
             for x in range(8):
-                if self.opponent_grid[x][y] == 1:  # Tir raté
+                if self.opponent_grid[x][y] == 0:
+                    self.set_led(x,y, OFF)
+                elif self.opponent_grid[x][y] == 1:  # Tir raté
                     self.set_led(x, y, GRAY)
                 elif self.opponent_grid[x][y] == 2:  # Bateau touché
                     self.set_led(x, y, ORANGE)
                 elif self.opponent_grid[x][y] == 3:  # Bateau coulé
                     self.set_led(x, y, RED)
+
+    def print_opponent_grid(self, is_grid_on = False):
+        """
+        Affiche la grille de l'adversaire sous forme de texte pour debug (très très stylé).
+        0 : rien
+        1 : tir raté
+        2 : bateau touché
+        3 : bateau coulé
+        """
+        if is_grid_on:
+            print("\nGrille adversaire :")
+            for y in range(8):
+                row = "                                               "
+                for x in range(8):
+                    cell = self.opponent_grid[x][y]
+                    row += f"{cell} "
+                print(row)
+            print("")
 
     def display_player_grid(self):
         """
@@ -1207,25 +1270,69 @@ class TrellisManager:
         """
         for y in range(8):
             for x in range(8):
-                if self.player_grid[x][y] == 1:  # Tir raté
+                if self.player_grid[x][y] == 0:  # Rien
+                    self.set_led(x, y, OFF)
+                elif self.player_grid[x][y] == 1:  # Tir raté
                     self.set_led(x, y, GRAY)
-                
-                elif self.player_grid[x][y] == 2:  # Bateau non touché par l'ennemis
-                    # Bleu uniquement sur (player_grid)
-                    for num_bateau, ship in enumerate(self.player_ships): # Enumerate pour récupérer l'index du bateau et mettre de la couleur
-                        for gx, gy in ship:
-                            self.set_led(gx, gy, couleurs_bateaux[num_bateau])  # Applique la couleur en fonction de l'index du bateau
-                
+                elif self.player_grid[x][y] == 2:  # Bateau intact
+                    # Retrouve la couleur correspondant au bateau
+                    couleur = None
+                    for num_bateau, ship in enumerate(self.player_ships):
+                        if (x, y) in ship:
+                            couleur = couleurs_bateaux[num_bateau]
+                            break
+                    if couleur:
+                        self.set_led(x, y, couleur)
                 elif self.player_grid[x][y] == 3:  # Bateau touché
                     self.set_led(x, y, ORANGE)
-                # elif self.player_grid[x][y] == 4: # Bateau coulé (dans la théorie ca marche mais au cas ou on le check manuellement en dessous)
-                #     self.set_led(x, y, RED)
-                else:
-                    # Bateaux coulé
-                    for ship in self.player_ships:
-                        if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Si toutes les cases du bateau sont touchées
-                                for sx, sy in ship:
-                                    self.set_led(sx, sy, RED)
+                elif self.player_grid[x][y] == 4:  # Bateau coulé
+                    self.set_led(x, y, RED)
+
+    def envoyer_boats(self):
+        """
+        Envoie la liste des positions de bateaux sous forme standardisée.
+        """
+        boat_data = []
+        for ship in self.player_ships:
+            positions = ";".join(f"{x},{y}" for x, y in ship)
+            boat_data.append(positions)
+        
+        message = "BOATS:" + "|".join(boat_data) # BOATS:2,3;2,4;2,5|5,0;5,1 (les , sépare les coordonnées x,y et le | sépare les bateaux)
+        print(f"Boats send : {message}") # Debug
+        self.envoyer(message)
+
+    def recevoir_boats(self, encoded_boats):
+        """
+        Reçoit et parse une commande BOATS.
+        """
+
+        boats_data = encoded_boats[6:]  # enlève "BOATS:"
+        ships = []
+        for ship_str in boats_data.split("|"):
+            ship = []
+            for coord in ship_str.split(";"):
+                x, y = map(int, coord.split(","))
+                ship.append((x, y))
+            ships.append(ship)
+
+        print(f"Bateaux adverses: {ships}")
+        return ships
+    
+    def game_Over(self):
+        """
+        Défini si l'adversaire a encore des bateaux ou non
+        """
+        for ship_O in self.opponent_boats:
+            for xo, yo in ship_O:
+                if self.opponent_grid[xo][yo] == 2:
+                    return None
+                
+        for ship_P in self.player_ships:
+            for xp, yp in ship_P:
+                if self.player_grid[xp][yp] == 2:
+                    return None
+        
+        return "Win"
 
     def main2(self):
         """
@@ -1240,93 +1347,102 @@ class TrellisManager:
 
         """
         self.game_running = True
+
         self.player_ships = []
+        self.opponent_boats = []
+
         self.player_grid = [ [0] * 8 for i in range(8)] # Grille joueur
         self.opponent_grid = [ [0] * 8 for i in range(8)]
+
         self.player_sunken_ships = []
         self.current_player_sunken_ships = []
+
 
         # Main loop
         while self.game_running:
             cmd = self.lire()
             if not cmd:
                 continue
-            if cmd == "DUO?":
-                self.envoyer("YESDUO")
-                print("En attente d'un adversaire...")
-                continue
 
             # Placement demandé : retour READY
             if cmd == "PLACE":
                 self.placement_bateaux()
+                print(f'Bateaux du joueur :')
                 for ship in self.player_ships:
-                    print(f'Bateau du joueur \n {ship}')
+                    print(ship)
                     for x, y in ship:
-                        self.player_grid[x][y] == 2
+                        self.player_grid[x][y] = 2
                 self.envoyer("READY")
+                time.sleep(0.5)
+                self.envoyer_boats()
+            
+            elif cmd.startswith("BOATS:"):
+                #print(f"[Debug] boats received {type(cmd)} : {cmd}")
+                self.opponent_boats = self.recevoir_boats(cmd)
 
             # Demande de verification d'un tir : retour RESULT + [WIN,TOUCHE,RATE]
             elif cmd.startswith("TIR:"):
+                self.display_player_grid()
                 _, coord = cmd.split(":")
                 x, y = map(int, coord.split(","))
                 if self.player_grid[x][y] == 2:  # Bateau touché
                     self.player_grid[x][y] = 3  # Marque comme touché
                     self.set_led(x, y, ORANGE)
+
                     for ship in self.player_ships:
-                        if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):  # Vérifie si le bateau est coulé
+                        if all(self.player_grid[sx][sy] == 3 for sx, sy in ship):
                             for sx, sy in ship:
-                                self.player_grid[sx][sy] = 4  # Marque comme coulé
+                                self.player_grid[sx][sy] = 4
                                 self.set_led(sx, sy, RED)
-                            self.envoyer("RESULT:COULE")
-                            break
-                        else:
-                            self.envoyer("RESULT:TOUCHE")
+                            
                 else:
                     self.player_grid[x][y] = 1  # Marque comme raté
                     self.set_led(x, y, GRAY)
-                    self.envoyer("RESULT:RATE")
+            
+                time.sleep(1) # Le temps de comtemplé les tirs de merde de l'adversaire
 
-            # Recupération des resultat du tir réalisé : retour None
-            elif cmd.startswith("RESULT:"):
-                result = cmd.split(":")[1]  # Extrait le résultat ("RATE", "TOUCHE", "COULE")
-                x, y = self.last_shot  # Coordonnées du dernier tir
-                self.update_opponent_grid(x, y, result)  # Met à jour la grille de l'adversaire
-                self.display_opponent_grid()  # Met à jour l'affichage de la grille "Attauant"
-
+            
             # Demande le tir du joueur : retour TIR:x,y
             elif cmd == "YOURTURN":
-                print("C'est votre tour !")
+                #print("C'est votre tour !")
+                self.display_opponent_grid()
                 joueur_a_joue = False
-                tir_joueur = None  # Définit tir_joueur dans l'outer scope
+                tir_joueur = None
 
                 def handle_player_input(x, y, edge):
-                    """
-                    Callback pour gérer l'entrée du joueur via les boutons NeoTrellis.
-
-                    cf: player_turn_logic(self)
-
-                    """
                     nonlocal joueur_a_joue, tir_joueur
-                    if edge == NeoTrellis.EDGE_RISING and not joueur_a_joue:  # Si c'est le premier bouton touché
+
+                    if edge == NeoTrellis.EDGE_RISING and not joueur_a_joue:
                         tir_joueur = (x, y)
                         joueur_a_joue = True
 
-                # Configure les callbacks pour les inputs du joueur
                 for y in range(8):
                     for x in range(8):
                         self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
                         self.trellis.set_callback(x, y, handle_player_input)
 
-                # Attend l'input du joueur
+                #Attend le coup du joueur
                 while not joueur_a_joue:
                     self.trellis.sync()
                     time.sleep(0.01)
 
-                # Gère le tir du joueur
+                # Conserve le tir pour analysé son résultat
                 x, y = tir_joueur
-                self.last_shot = (x, y)  # Sauvegarde le tir pour traiter le résultat plus tard
+                self.last_shot = (x, y)
                 print(f"Tir envoyé en ({x}, {y})")
-                self.envoyer(f"TIR:{x},{y}")  # Envoie le tir à l'adversaire
+                self.print_opponent_grid(is_grid_on)
+                self.envoyer(f"TIR:{x},{y}")  #   envoyer au serveur/adversaire pour le retour du tir ennemi
+
+                # Gére localement le résultat du tir :
+                self.update_opponent_grid(x, y) # Met à jour en fonction du resultat du tir
+                self.display_opponent_grid()
+                if self.game_Over() != None:
+                    print(self.game_Over())
+                    envoyer(self.game_Over())
+                    self.initialize_board("endGame_"+ self.game_Over())
+                time.sleep(1.5)
+                self.display_player_grid() # Changement avant de se faire tiré dessus pour mieux voir et plus fluide
+
 
 #########################################################################################
 ############################ Kube Kube à partir de cette ligne ##########################
