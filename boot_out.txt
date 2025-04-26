@@ -1,0 +1,5 @@
+Adafruit CircuitPython 9.2.4 on 2025-01-28; Adafruit Feather M4 Express with samd51j19
+Board ID:feather_m4_express
+UID:4657A1084E384B53202020522D4316FF
+boot.py sortie :
+Boot.py est exécuté et prit en compte par la carte

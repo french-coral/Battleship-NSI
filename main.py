@@ -3,6 +3,8 @@ import time
 import random
 
 connected_ports = {} # UID : serial.Serial object
+                    
+                     # UID Supposé : 6E9E13C44E384B53202020521E2216FF &  657A1084E384B53202020522D4316FF
 
 
 ###########################################################################
@@ -62,7 +64,7 @@ def get_port_by_serial(target_serial, detected_ports = None):
     Récupère les ports qui recoive une UID précise,
     Ici:
     Plateau 1: 4657A1084E384B53202020522D4316FF
-    Plateau 2: Unknown
+    Plateau 2: 6E9E13C44E384B53202020521E2216FF
     """
     if not detected_ports:
         detected_ports = serial.tools.list_ports.comports() # Debug temporaire 23/04
@@ -79,7 +81,7 @@ def try_handshake(port_name, baud=9600, timeout=1.5):
     """
     try:
         with serial.Serial(port_name, baud, timeout=timeout) as ser:
-            time.sleep(0.6) # laisse la Feather respirer
+            time.sleep(0.1) # laisse la Feather respirer
 
             ser.reset_input_buffer() # Soit disant plus clean mais ca pete tout
             ser.reset_output_buffer()
@@ -87,7 +89,7 @@ def try_handshake(port_name, baud=9600, timeout=1.5):
             print("Pinging ...\n")
             ser.write(b"PING\n")  # Commande bidon qui attend une réponse connue (ok)
             ser.flush()
-            time.sleep(1)
+            time.sleep(0.3)
 
             # On laisse un peu de marge pour la réponse
             if ser.in_waiting:
@@ -138,27 +140,23 @@ def check_connections():
 
 def detect_devices(baud=9600, timeout=1):
     """
-    Détecte les ports disponibles et assigne les ports aux plateaux en fonction de leur UID.
-    Pour le moment, le code est configuré pour fonctionner avec un seul plateau (plateau_1).
+    Détecte les plateaux branché sur les ports USB de la machine (PC ou raspberry pi).
+    Envoie un PING et attend une reponse, oh OK il renvoie un accusé de réception pour s'assurer que
+    les 2 parties (plateau et script maître) confirme la conection à l'autre.
 
+    Il skip : - Les ports bluetooth qui attendent dans le vide une réponse
+              - Les ports déjà connectés  
 
     Testing purposes : Affiche l'etat des ports dispos
     La FeatherM4 devrait ressembler à ca:
     ----------
-    Nom du port     : COM5 (ou COMx sous windows)
-    Description     : Périphérique série USB (COM5)
-    Fabricant       : Microsoft
+    Nom du port     : COMx sous Windows et /dev/ttyACMx sous Linux
+    Description     : Périphérique série USB (Port de communiquation)
+    Fabricant       : Adafruit
     Produit         : None
-    Numéro de série : 4657A1084E384B53202020522D4316FF (c'est celle du plateau_1)
+    Numéro de série : 4657A1084E384B53202020522D4316FF ou 6E9E13C44E384B53202020521E2216FF
     ----------
    
-    # UID des plateaux
-    uid_plateau_1 = "4657A1084E384B53202020522D4316FF"  # UID du plateau 1
-    #uid_plateau_2 = "ICIMETTRELUIDDUPLATEAU2"  # UID du plateau 2 (à remplacer par le vrai UID)
-
-    # Initialisation des ports
-    port_plateau_1 = None
-    #port_plateau_2 = None
     """
 
     ports = serial.tools.list_ports.comports()
@@ -197,67 +195,37 @@ def detect_devices(baud=9600, timeout=1):
 
     return new_feathers
 
-    
-
-"""ports = detect_devices()
-if ports:
-    port1 = safe_open(ports[0])
-    port2 = safe_open(ports[1]) if len(ports) > 1 else None
-"""
-port1 = None
-port2 = None
 
 
-""" 
-# Test automatique des ports
-port_detected_1 = get_port_by_serial("4657A1084E384B53202020522D4316FF",ports)  # UID du plateau 1
-#port_detected_2 = get_port_by_serial("ICIMETTRELUIDDUPLATEAU2",ports)  # UID du plateau 2 (à remplacer par le vrai UID)
-
-port_plateau_1 = safe_open(port_detected_1) if port_detected_1 else None
-#port_plateau_2 = safe_open(port_detected_2) if port_detected_2 else None
-
-if port_plateau_1:
-    print("Plateau 1 connecté.")
-else:
-    print("Plateau 1 non détecté.")
-
-#if port_plateau_2:
-    #print("Plateau 2 connecté.")
-#else:
-    #print("Plateau 2 non détecté.")
-    
-time.sleep(2)
-"""
-
-
-
-def game_ready(port_plateau_1):#, port_plateau_2):
+def game_ready(port_plateau_1, port_plateau_2):
     """
-    Attend que les 2 plateaux soit dans le mode duo.
+    Attend que les 2 plateaux soit dans le mode duo (est cliqué sur l'icon du mode duo).
     """
     p1_duo_activated = False
-    #p2_duo_activated = False
+    p2_duo_activated = False
 
-    while not p1_duo_activated: # and not p2_duo_activated:
+    while not p1_duo_activated and not p2_duo_activated:
 
         time.sleep(0.1)
 
-        if port_plateau_1:
-            response_p1 = lire(port_plateau_1)
-            if response_p1 == "DUOREADY":
-                p1_duo_activated = True
+        if not p1_duo_activated: # Evite de checker un truc déjà True
+            if port_plateau_1:
+                response_p1 = lire(port_plateau_1)
+                if response_p1 == "DUOREADY":
+                    p1_duo_activated = True
 
-        #if port_plateau_2:
-        #    response_p2 = lire(port_plateau_2)
-        #    if response_p2 == "DUOREADY":
-        #        p2_duo_activated = True
+        if not p2_duo_activated:
+            if port_plateau_2:
+                response_p2 = lire(port_plateau_2)
+                if response_p2 == "DUOREADY":
+                    p2_duo_activated = True
 
     print("Mode duo activé pour les deux plateaux.\n")
-    print("Demande de placement des plateaux.")
-    start_game(port_plateau_1)#, port_plateau_2)
+    print("Demande de placement des plateaux.\n")
+    start_game(port_plateau_1, port_plateau_2)
 
 
-def start_game(port_plateau_1):#, port_plateau_2):
+def start_game(port_plateau_1, port_plateau_2):
     """
     Fonction principale pour démarrer le jeu.
     Placement des bateaux, attente de la préparation des joueurs,
@@ -267,54 +235,41 @@ def start_game(port_plateau_1):#, port_plateau_2):
 
     # Phase de placement des bateaux
     envoyer(port_plateau_1, "PLACE")
-    #envoyer(port_plateau_2, "PLACE")
+    envoyer(port_plateau_2, "PLACE")
+
+    # Attente du placement des 2 plateaux
     ready1 = False
-    while not ready1:# and not ready 2:
+    ready2 = False
+
+    while not ready1 and not ready2:
+
         cmd1 = lire(port_plateau_1)
         if cmd1 == "READY":
             ready1 = True
-    print("Le joueur est prêt. Début de la partie.")
+            print("Le joueur 1 est prêt.")
+        
+        cmd2 = lire(port_plateau_2)
+        if cmd2 == "READY":
+            ready2 = True
+            print("Le joueur 2 est prêt.")
+            
+    print("Les 2 joueurs sont prêt.\n [⇆] Début de la partie.")
     game_running = True
 
-    game_loop(port_plateau_1)#, port_plateau_2)
+    game_loop(port_plateau_1, port_plateau_2)
 
 
-def game_loop(port_plateau_1):#, port_plateau_2):
-    """
-    Boucle principale du jeu.
-    Gère les tours des joueurs, les tirs et les résultats.
-    """
+def game_loop(port_plateau_1, port_plateau_2):
+    pass
     
-    global game_running
-    
-    while game_running:
-
-        print("\n---- TOUR du Joueur 1 ----")
-        envoyer(port_plateau_1, "YOURTURN")
-
-        cmd = lire(port_plateau_1)
-        if cmd and cmd.startswith("TIR:"):
-
-            # Simule une réponse du second plateau
-            _, coord = cmd.split(":")
-            x, y = map(int, coord.split(","))
-            print(f"Tir reçu en ({x}, {y})")
-
-            # Simule un résultat aléatoire pour le debug
-            result = random.choice(["RESULT:RATE", "RESULT:TOUCHE", "RESULT:COULE"])
-            print(f"Résultat simulé : {result}")
-            envoyer(port_plateau_1, result)
-
-            if result == "RESULT:COULE":
-                print("Un bateau a été coulé.")
-            elif result == "RESULT:WIN":
-                print("Le joueur 1 a gagné !")
-                break
-
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
 # Voir github commit du 04/23/25
 
+    
+#Set up les ports
+port1 = None
+port2 = None
 
 while True:
 
@@ -326,7 +281,7 @@ while True:
 
     if len(connected_ports) >= 2:
         ports_list = list(connected_ports.values())
-        print("[2] Deux plateaux connectés ! Lancement de la partie...\n")
+        print("[2] Deux plateaux connectés !\n")
 
    
         game_ready(ports_list[0], ports_list[1])

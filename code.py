@@ -171,9 +171,11 @@ def attendre_handshake():
     print("En attente d'un PING pour initialisation...")
 
     communication.reset_input_buffer()
+    tries = 0
         
-    while True:
+    while True and tries < 3000:
         cmd = lire()
+        tries += 0.01
         if cmd == "PING":
             print(f">>> {cmd}")
             envoyer("OK")
@@ -182,9 +184,14 @@ def attendre_handshake():
             
         elif cmd == "RECEIVED":
             print(f">>> {cmd}")
-            print("Réponse reçue, handshake terminé. Init et tout le blabla")
+            print("Réponse reçue, handshake terminé.\n")
             break
-    return
+
+    if cmd != "RECEIVED":
+        print("[x] End of handshake\n")
+        return "PVE"
+
+    return "1V1"
 
 #############################################
 
@@ -372,11 +379,10 @@ class TrellisManager:
                 Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
 
             """
-            attendre_handshake()
+            mode = attendre_handshake()
 
 
             print("Affichage du menu...")
-            mode = detect_mode()  # Détecte si une communication est établie
             print(f"Mode détecté : {mode}")
 
             self.trellis.activate_key(6, 6, NeoTrellis.EDGE_RISING)
