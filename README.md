@@ -32,7 +32,7 @@ ou
     - "CircuitPython" officielle Adafruit
     - "Serial Monitor" intégré
 
----
+
 
 ## Architecture du projet
 
@@ -46,7 +46,7 @@ ou
                                         
 ```
 
----
+
 
 ## Fonctionnement
 
@@ -61,7 +61,7 @@ ou
 
 Plus chaque Feather à un mode solo.
 
----
+
 
 ## Déroulement d'une partie
 
@@ -76,7 +76,7 @@ Plus chaque Feather à un mode solo.
 
 Fin quand un joueur a coulé tous les bateaux adverses (`RESULT:WIN`).
 
----
+
 
 ## Exemple de service `systemd` pour autostart (raspberry pi)
 
@@ -118,7 +118,7 @@ sudo systemctl start feather.service
 sudo systemctl status feather.service
 ```
 
----
+
 
 ## Conseils pratiques
 
@@ -126,7 +126,7 @@ sudo systemctl status feather.service
 - **Brancher les Feather AVANT de lancer `main.py`** si pas de Hub.
 - **Toujours vérifier que `pyserial` est bien installé**.
 
----
+
 
 ## Futures améliorations possibles
 
