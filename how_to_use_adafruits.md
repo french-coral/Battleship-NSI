@@ -87,8 +87,7 @@ BLUE = (0, 0, 255)
 | Sujet | Détail |
 | --- | --- |
 | **Alimentation** | La Feather alimente le Trellis via 3V/GND. Ou juste l’USB quoi. |
-| **Communication** | Les données passent par I2C (2 broches : SDA/SCL). 
-Enfait y’a un port .console qui gère la console serial et un .data qui est la communication par port USB. |
+| **Communication** | Les données passent par I2C (2 broches : SDA/SCL). Enfait y’a un port .console qui gère la console serial et un .data qui est la communication par port USB. |
 | **Programmation** | Utiliser CircuitPython et la librairie `adafruit_neotrellis`. |
 | **Touch detection** | Chaque bouton est détectable par événement (appui court, appui long possible). |
 | **RGB LEDs** | Les LEDs peuvent afficher toutes les couleurs en RGB 24-bit. |
