@@ -16,12 +16,8 @@ is_grid_on = True
 """
 ################################################################################################################
 
-Les commentaires présents le long de ce code n' ont pas été corrigé ou vérifié en détails, il se peut qu'un certain "franglais"
-s'y glisse, je m'en excuse. (c'est pour moi de base)
-De plus certains commentaire sont outdated (si besoin il y a des dates sur certains commentaires)
-
-J'espère être le plus claire possible. Bonne chance. (vous en aurez besoin)
-En cas de question spécifique et TRES technique demandé à : Noah (il connait bien le code)
+Certains commentaire sont outdated (si besoin il y a des dates sur certains commentaires).
+Nous espèrons être le plus claire possible.
 
 ################################################################################################################
 
@@ -33,28 +29,26 @@ Informations sur le code / jeu :
 
 - Chaque joueur a une flotte de 3 navires : Grand => 4 cases / Moyen => 3 cases /Petit => 2 cases
 - Le joueur doit choisir la position de ses navires sur le plateau.
-  - Si le placement débuté ne convient pas il peut reappuyer sur les cases indésiré ou simplement cliqué ailleurs (qui ne fait pas suite du bateau)
+  - Si le placement débuté ne convient pas il peut reappuyer sur les cases indésirées ou simplement cliquer ailleurs (qui ne fait pas suite du bateau)
 - Le bot a ses navires positionnés automatiquement sur le plateau.
 
-- Menu avec "Solo" et "Duo" mode.  // D'autres jeu seront peut-être ajoutez
+- Menu avec "Solo" et "Duo" mode.  // D'autres jeux seront peut-être ajoutés
   - Un mode solo est disponible, il est codé sur le plateau directement.
-  - Le mode duo est disponible seulement si branché à la rapberry (finalité, pour le moment sur le pc, voir main.py)
-  - Le mode duo est disponible seulement si les 2 plateaux sont branchés. (dans la théorie)
+  - Le mode duo est disponible seulement si branché à la raspberry (finalité, pour le moment sur le pc, voir main.py)
+  - Le mode duo est disponible seulement si les 2 plateaux sont branchés. 
 
 Fonctionnement du mode 1v1 / Duo :
-- Le script maître attent que les 2 plateaux est séléctionnés le mode duo via le menu
-- Le script maître demande au 2 plateaux de placer leur bateaux respectifs : quand c'est fait les 2 renvoire READY
+- Le script maître attend les 2 plateaux est séléctionné le mode duo via le menu
+- Le script maître demande au 2 plateaux de placer leurs bateaux respectifs : quand c'est fait les 2 renvoient READY
 - Puis le script maître gère simplement le transfert d'information et la logique de tour.
-- Les leds , logique de jeu, placement de bateaux, touché coule etc sont gérer respectivement sur chacun des plateaux
+- Les leds , logique de jeu, placement de bateaux, touché coulé etc sont gérés respectivement sur chacun des plateaux
 
-- Le transfert de données / infos se fait par l'ouverture des port par leur UID (cd boot_out.txt dans le (E:)CIRCUITPY)
-- Les données / infos passe ensuite par usb_cdc.data (faire la dif avec usb_cdc.console)
-  - Les données sont des chaînes de caractères encodées en 8bits
-- Le plateau ne décode rien de ce sui concerne la partie il fait juste le transfert d'une carte à l'autre.
-
+- Le transfert de données / infos se fait par l'ouverture des ports par leur UID (cd boot_out.txt dans le (E:)CIRCUITPY)
+- Les données / infos passent ensuite par usb_cdc.data (faire la différence avec usb_cdc.console)
+- Les données sont des chaînes de caractères encodées en 8bits
+- Le plateau ne décode rien de ce qui concerne la partie, il fait juste le transfert d'une carte à l'autre.
 
 ################################################################################################################
-
 """
 
 import time
@@ -64,37 +58,34 @@ import random
 from adafruit_neotrellis.neotrellis import NeoTrellis
 from adafruit_neotrellis.multitrellis import MultiTrellis
 
-
 # Init du I2C
 i2c_bus = board.I2C()
 
-#modules NeoTrellis
+# Modules NeoTrellis
 trelli = [
     [NeoTrellis(i2c_bus, False, addr=0x2E), NeoTrellis(i2c_bus, False, addr=0x2F)],
     [NeoTrellis(i2c_bus, False, addr=0x30), NeoTrellis(i2c_bus, False, addr=0x31)],
 ]
 
-trellis = MultiTrellis(trelli) #Gestion pour le 8x8
+trellis = MultiTrellis(trelli) # Gestion pour le 8x8
 
-#couleurs
+# Couleurs
 OFF = (0, 0, 0)
 BLUE = (0, 150, 250) # Vue des bateaux (placement et instance attaqué)
-GREEN = (0,255,0) # Placement des bateaux et animation de win
-FIN_COLOR = None # Pour les animation de fin de solo mode
-MAGENTA = (255, 0, 255) # Complétement inutile
-RED = (255, 0, 0) # Tir raté ou placement invalide + animation de loose
+GREEN = (0,255,0) # Placement des bateaux et animation de victoire
+FIN_COLOR = None # Pour les animations de fin de solo mode
+MAGENTA = (255, 0, 255) 
+RED = (255, 0, 0) # Tir raté ou placement invalide + animation de défaite
 GRAY = (100, 100, 100)  # Gris pour les tirs ratés du bot
 ORANGE = (255, 165, 0)  # Orange pour les tirs qui touchent un bateau
-blink_bots_play = 0.1 # Temps de clignotement des LEDs du bot pour vois où il a tiré
-couleurs_bateaux = [(0, 0, 255), (0, 128, 255), (0, 255, 255)]  # Bleu foncé, bleu moyen, bleu clair # Teintes de bleu pour chaque bateau (Request de Noah)
-
+blink_bots_play = 0.1 # Temps de clignotement des LEDs du bot pour voir où il a tiré
+couleurs_bateaux = [(0, 0, 255), (0, 128, 255), (0, 255, 255)]  # Bleu foncé, bleu moyen, bleu clair # Teintes de bleu pour chaque bateau
 
 #############################################
 
 # Les fonctions suivantes sont à usage unique pour l'init de connection, seulement pour set up le mode PVE ou 1V1
 
 #############################################
-
 
 def waiting_animation():
     """
@@ -115,14 +106,10 @@ def waiting_animation():
         time.sleep(0.2)
     trellis.color(3, 4, OFF)
 
-
-# Serial / absolument useless mtn 23/04
+# Serial
 def wait_for_connection():
     """
     Attend l'arrivée de la connection
-
-    Edit: Ne marche pas du tout 06/04
-
     """
     timeout = 0
     waiting_animation()
@@ -134,17 +121,16 @@ def wait_for_connection():
             return
         time.sleep(0.3)
 
-def detect_mode(): #Fonction ne sert nul part mais quand je l'enlève ca casse, donc ca reste là pour le moment
+def detect_mode(): 
     """
     Détecte si le plateau est connecté à un script maître (pc ou raspberry) via USB.
 
-    Edit: - Fonction originale vouer à changer. 06/04
+     Edit :
           - Maintenant seulement basé sur la com usb_cdc.data et non un vrai échange pour être sur de la disponibilité du plateau. 09/04
-          - Enfait usb_cdc.data EST ouvert c'est juste que y'as pas forcement quelqu'un qui y accède, en gros ca check juste si le plateau est branché en USB
-            si le mode PVE s'active c'est que c'est vraiment la merde, gl. 23/04
+          - En faite usb_cdc.data EST ouvert c'est juste que y'as pas forcement quelqu'un qui y accède, en gros ça check juste si le plateau est branché en USB 23/04
     """
     # /!/ Si vous utliser cette ligne en dessous n'oubliez pas d'ajouter 'import supervisor' /!/
-    # Alternative en test pour le check de com. renvoie True : je travail encore dessus 
+    # Alternative en test pour le check de com. renvoie True
     # if supervisor.runtime.serial_connected: 
     #    return "1v1"
 
@@ -153,13 +139,12 @@ def detect_mode(): #Fonction ne sert nul part mais quand je l'enlève ca casse, 
         return "1v1"
     return "PVE"
 
-
 communication = usb_cdc.data
 
 def lire():
     """
-    Récupère les messages via USB et les sépare si plusieurs messages sont collés. (pb au deboggage)
-    Il existe un version bien plus simple cependant elle est là pour faire des tests (restera peut être à la fin du projet)
+    Récupère les messages via USB et les sépare si plusieurs messages sont collés.
+    Il existe une version bien plus simple cependant elle est là pour faire des tests.
     """
     if communication.in_waiting:
         try:
@@ -175,7 +160,7 @@ def wait_for_cmd(timeout = 1):
         cmd = lire()
         if cmd:
             return cmd
-        time.sleep(0.1)  # petite pause pour éviter de surcharger le CPU
+        time.sleep(0.1)  #  Pause pour éviter de surcharger le CPU
     return None  # Timeout atteint sans réponse
 
 def envoyer(message):
@@ -188,10 +173,9 @@ def envoyer(message):
     except Exception as e:
         print("Erreur d'envoi :", e)
 
-
 def attendre_handshake():
     """
-    Attente du handshake pour initialisé la communication feather-server
+    Attente du handshake pour initialiser la communication feather-server
     """
     print("En attente d'un PING pour initialisation...")
 
@@ -231,7 +215,7 @@ class TrellisManager:
 
     def get_led_id(self, x, y):
         """
-        Convertit les coord en un ID de la LED, pas utiliser vraiment, plus pour du débug si besoin
+        Convertit les coordonnées en un ID de la LED, plus pour du débug si besoin
         coord: (x,y)
         ID: (0-63)
         """
@@ -239,7 +223,7 @@ class TrellisManager:
 
     def get_led_coordinates(self, led_id):
         """
-        Convertit un ID LED en coordonnées, comme préciser dans get_led_id(), cette fonction à pour but de débug et mapper le tableau,
+        Convertit un ID LED en coordonnées, comme précisé dans get_led_id(), cette fonction a pour but de débug et mapper le tableau,
         ce n'est pas utilisé.
         coord: (x,y)
         ID: (0-63)
@@ -257,7 +241,7 @@ class TrellisManager:
 
     def get_led_status(self, x, y):
         """
-        Récupère l'état actuel d'une LED d'après ses coord
+        Récupère l'état actuel d'une LED d'après ses coordonnées
         coord: (x,y)
         """
         return self.led_status[y][x]
@@ -266,20 +250,20 @@ class TrellisManager:
     def handle_button_test(self, x, y, edge):
         """
         Gère les appuis sur les boutons
-        Plus c'est le bac à sable du menu. C'est cool, on le garde
+        C'est le bac à sable du menu. 
         coord: (x,y)
         edge: RISING ou FALLING
         """
-        if edge == NeoTrellis.EDGE_RISING:# Button qui remonte
+        if edge == NeoTrellis.EDGE_RISING :# Button qui remonte
             if self.get_led_status(x, y) == OFF:
-                self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random c bo 
+                self.set_led(x, y, (random.randint(0,255),random.randint(0,255),random.randint(0,255)))  # Color random
             else:
-                self.set_led(x, y, OFF)# Éteint si déjà allumé
+                self.set_led(x, y, OFF )# Éteint si déjà allumé
             envoyer('OK')
 
     def blink(self,x,y,color,init_color = None, time_blink = 0.05):
 
-        if not init_color: init_color = self.get_led_status(x, y) # Si pas préciser ca prend tout seul la couleur de base de la touche
+        if not init_color: init_color = self.get_led_status(x, y) # Si ce n'est pas précisé ça prend tout seul la couleur de base de la touche
 
         repeat = 4 # Blink error placement (lors du placement des bateaux)
         if time_blink is blink_bots_play:
@@ -295,17 +279,16 @@ class TrellisManager:
 
     def initialize_board(self,step:str):
         """
-        Initialisation des LEDs avec un effet dégradé, miam miam
+        Initialisation des LEDs avec un effet dégradé
 
-        Le but est l'animation du board qui ce clear donc la couleur dépend du "couleur_gradient",
-        plus il est élevé plus la différence des couleurs du dégradé seront marquées.
+        Le but est l'animation du board qui se clear donc la couleur dépend du "couleur_gradient",
+        plus il est élevé plus la différence des couleurs du dégradé sera marquée.
 
         Animations (step):
         - "Menu" = blue / light blue
         - "endGame_Win" = Green victory animation + multi-pastel colors clear animation
         - "endGame_Lose" = Red victory animation + multi-pastel colors clear animation
         - "init" = Initialisation du plateau
-
         """
         if step == "menu":
             couleur_gradient = 5
@@ -326,26 +309,23 @@ class TrellisManager:
                     for j in range(8):
                         self.set_led(i, j, OFF)
 
-        # Bac à sable du menu, il est un peu perdu mais oklm
+        # Bac à sable du menu
         for y in range(8):
             for x in range(8):
                 self.trellis.activate_key(x, y, NeoTrellis.EDGE_RISING)
-                self.trellis.set_callback(x, y, self.handle_button_test) # associe la fonction handle quand le (x,y) est cliqué. ps: si question sur le callback demander à Matteo ;)
+                self.trellis.set_callback(x, y, self.handle_button_test) # Associe la fonction handle quand le (x,y) est cliqué.
 
                 # Applique un dégradé
                 gradient_color = (x * couleur_gradient, y * couleur_gradient, 150)
                 self.set_led(x, y, gradient_color)
                 time.sleep(0.02)
 
-
-        # Configure le bouton de reset (ne marche visiblement pas donc on va le comment out temporairement)
-        # Marchera probablement jamais. 09/04
+        # Configure le bouton de reset 
         #self.trellis.activate_key(0, 0, NeoTrellis.EDGE_RISING)
         #self.trellis.activate_key(0, 0, NeoTrellis.EDGE_FALLING)
         #self.trellis.set_callback(0, 0, self.benchmark_reset)
-
-
-        # Éteint toutes les LEDs après l'effet de clear/demarrage
+      
+        # Éteint toutes les LEDs après l'effet de clear/démarrage
         time.sleep(0.05)
         for y in range(8):
             for x in range(8):
@@ -356,12 +336,11 @@ class TrellisManager:
         """
         Fonction de "RESET" : Réinitialise le plateau si un bouton est maintenu plus de 2,5 secondes.
 
-        Edit: - Ne marche absolument pas, besoin d'une alternative.  04/04
-              - Débrancher - rebrancher fera l'affaire parce que c'est infaisable comme feature.  09/4
-
+        Edit: 
+              - Débrancher - rebrancher fera l'affaire car c'est infaisable comme feature.  09/4
         """
         reset_button = (0, 0)  # Coordonnées du bouton de reset
-        hold_time = 2.5  # Temps nécessaire pour déclencher le reset (secondes)
+        hold_time = 2.5  # Temps nécessaire pour déclencher le reset (en secondes)
 
         if (x, y) == reset_button:  # Vérifie si le bouton de reset est pressé
             if edge == NeoTrellis.EDGE_RISING:  # Début de l'appui
@@ -369,7 +348,7 @@ class TrellisManager:
             elif edge == NeoTrellis.EDGE_FALLING:  # Fin de l'appui
                 if time.monotonic() - self.reset_start_time >= hold_time:  # Vérifie la durée de l'appui
                     print("//RESET//\n")
-                    print("... ... ...\n")  # Pour bien paniquer :)
+                    print("... ... ...\n")  
                     self.reset_requested = True
                     self.game_running = False  # Arrête la partie en cours
                     self.bot_attacking = False
@@ -389,7 +368,6 @@ class TrellisManager:
     def clear_all_callbacks(self):
         """
         Clear all callbacks des bouttons.
-
         """
         for y in range(8):
             for x in range(8):
@@ -397,18 +375,16 @@ class TrellisManager:
     
     def menu(self, NeedHandshake = "with_handshake"):
             """
-                Set les leds et bouttons du menu en fonction du  type de menu
+                Set les leds et boutons du menu en fonction du type de menu
                 Solo: I
                 Duo: I et II (sur le menu)
 
-                Edit : Vouer à être modifier avec le mode duo gérer sur raspberry.  03/04
-
+                Edit : Voué à être modifié avec le mode duo géré sur raspberry.  03/04
             """
             if NeedHandshake == "with_handshake": # Pour le sénario un plateau fait du solo alors que les 2 étaient connectés
                 mode = attendre_handshake()
             else:
                 mode = "PVE"
-
 
             print("Affichage du menu...")
             print(f"Mode détecté : {mode}")
@@ -423,7 +399,7 @@ class TrellisManager:
                     self.trellis.activate_key(leds_[i][0], leds_[i][1], NeoTrellis.EDGE_RISING)
                     self.trellis.set_callback(leds_[i][0], leds_[i][1], self.handle_menu)
                 for n in range(2,6):
-                    self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas dispo donc rouge
+                    self.set_led(leds_[n][0],leds_[n][1], RED) #Mode de jeu pas disponible donc rouge
                     self.trellis.activate_key(leds_[n][0], leds_[n][1], NeoTrellis.EDGE_RISING)
                     self.trellis.set_callback(leds_[n][0], leds_[n][1], self.blink)
 
@@ -436,11 +412,7 @@ class TrellisManager:
     def handle_menu(self, x, y, edge):
         """
         Gère le choix du menu en fonction du bouton pressé
-
-        Edit: Sera modifier si déplacer sur raspberry pi.  03/04
-              Peut-être pas enfait. 06/04
         """
-
         if edge == NeoTrellis.EDGE_RISING:
             if (x, y) in [(1,1), (1,2)]:  # Si on appuie sur la partie "Solo"
                 self.menu_type = 'Solo'
@@ -449,9 +421,8 @@ class TrellisManager:
                 self.initialize_board("menu")
                 self.main1()
 
-
             elif (x, y) in [(5,1), (5,2), (6,1), (6,2)]:  # Si on appuie sur "Duo"
-                if mode == 'PVE': # Animation du mode non disponible car n'éxiste juste pas
+                if mode == 'PVE': # Animation du mode non disponible car n'éxiste pas
                     self.menu_type = 'Solo'
                     self.initialize_board('endGame_Lose') # /Debug/ Animation testing purposes
                     self.envoyer("WENT_SOLO")
@@ -475,7 +446,6 @@ class TrellisManager:
 
             # if self.menu_type :print(f"Mode sélectionné : {self.menu_type}") # Trop de fonction et de test renvoyaient les mêmes infos
 
-
     #########################################################################################
     ############################ Mode PVE a partir de cette ligne ###########################
     #########################################################################################
@@ -495,19 +465,18 @@ class TrellisManager:
             while not IsBateau_placed:
                 x = random.randint(0, 7)
                 y = random.randint(0, 7)
-                direction = random.choice(["Horz", "Vert"])  # Horizontal ou Vertical en gros
-
+                direction = random.choice(["Horz", "Vert"])  # Horizontal ou Vertical
 
                 # Vérifier si le bateau peut être placé
                 positions = []
-                if direction == "Horz" and x + taille <= 8:  # Horizontal touche t il le bord ?
+                if direction == "Horz" and x + taille <= 8:  # Horizontal touche t-il le bord ?
                     for i in range(taille):
                         positions.append((x + i, y)) # Pose horizontal
-                elif direction == "Vert" and y + taille <= 8:  # Vertical, même chose
+                elif direction == "Vert" and y + taille <= 8:  # Vertical touche t-il le bord ?
                     for i in range(taille):
                         positions.append((x, y + i)) # Pose vertical
 
-                if not positions: # si le bateau depasse du plateau on retry jusqu'à que ce rentre
+                if not positions: # si le bateau dépasse du plateau réessayer jusqu'à que ça rentre
                     continue
 
                 IsBateau_placable = True
@@ -535,15 +504,13 @@ class TrellisManager:
 
         - Les cases doivent être adjacentes et alignées dans la direction choisie.
         - Les cases déjà utilisées ou en dehors de la grille ne sont pas valides.
-        - Le joueur peut placé devant ou derrière la bateu en cours de placement tant qu'elles sont valides
-
+        - Le joueur peut placer devant ou derrière le bateau en cours de placement tant qu'elles sont valides
         """
         tailles_bateaux = [4, 3, 2]  # Tailles des bateaux à placer
         self.player_ships = []  # Réinitialise les bateaux du joueur
         bateau_en_cours = []  # Stocke temporairement les positions du bateau en cours de placement
         direction = None  # Direction du bateau (None, "Horz", "Vert")
         bateau_actuel = 0  # Index du bateau en cours de placement
-
 
         def handle_placement(x, y, edge):
             """
@@ -563,10 +530,10 @@ class TrellisManager:
                         direction = None
                         return
 
-                    # Cas pariculier lors du placement du Grand bateau : je place 3 cases et je supprime celle du milieu, ca fait un bateau fracturé en 2 parties.
-                    if len(bateau_en_cours) >= 2: # Si 3 selectioner (uniquement pour le placement du bateau de 4 de long)
-                        xs = [coord[0] for coord in bateau_en_cours] # xs = [x1,x2,x3]; x des 3 cases séléctionner
-                        ys = [coord[1] for coord in bateau_en_cours] # ys = [y1,y2,y3]; y des 3 cases séléctionner
+                    # Cas particulier lors du placement du Grand bateau : je place 3 cases et je supprime celle du milieu, ça fait un bateau fracturé en 2 parties.
+                    if len(bateau_en_cours) >= 2: # Si 3 sélectionés (uniquement pour le placement du bateau de 4 de long)
+                        xs = [coord[0] for coord in bateau_en_cours] # xs = [x1,x2,x3]; x des 3 cases séléctionnés
+                        ys = [coord[1] for coord in bateau_en_cours] # ys = [y1,y2,y3]; y des 3 cases séléctionnés
 
                         if direction == "Horz" and min(xs) < x < max(xs): # x change si Horz
                             # Si la case supprimée est entre deux cases en direction horizontale
@@ -575,7 +542,7 @@ class TrellisManager:
                             bateau_en_cours = []
                             direction = None
                             return
-                        elif direction == "Vert" and min(ys) < y < max(ys): # y change si Vert
+                        elif direction == "Vert" and min(ys) < y < max(ys): # change si Vert
                             # Si la case supprimée est entre deux cases en direction verticale
                             for bx, by in bateau_en_cours:
                                 self.set_led(bx, by, OFF)
@@ -583,35 +550,30 @@ class TrellisManager:
                             direction = None
                             return
                         
-
                 # Empêche de placer un bateau sur un autre bateau.
                 for ship in self.player_ships:
                     if (x, y) in ship:
                         self.blink(x, y,RED)
                         return
 
-
                 print(f'Trying {x,y} in {bateau_en_cours}. Direction: {direction}/ Longueur: {len(bateau_en_cours)}\n') # Debugging
-
 
                 #################### 1ere case : Init ####################
 
-                # Si aucune case n'a encore été sélectionnée pour ce bateau
+                # Si aucune case n'a encore été sélectionné pour ce bateau
                 if not bateau_en_cours:
                     bateau_en_cours.append((x, y))
                     self.set_led(x, y, GREEN)  # Marque la première case en vert
                     print(f'Init at {x,y}')
                     return
 
-
                 ############### 2eme case : init direction ###############
 
                 ##############################################################################
                 ##############################################################################
 
-                # Code initiale remplacer, upload github du 04/04/25 si besoin de tester
-
-                # Alternative qui devrait marcher / même logique qu'avant mais plus simple a comprendre
+                # Code initiale remplacé, upload github du 04/04/25 si besoin de tester
+                  # Alternative qui devrait marcher / même logique qu'avant mais plus simple a comprendre
 
                 ##############################################################################
                 ##############################################################################
@@ -619,13 +581,13 @@ class TrellisManager:
                 if len(bateau_en_cours) == 1:
                     x0, y0 = bateau_en_cours[0]
 
-                    #Verification des case adjacentes pour déterminer la direction (horizontale et verticale)
+                    #Vérification des cases adjacentes pour déterminer la direction (horizontale et verticale)
                     if abs(x - x0) == 1 and y == y0:
                         direction = "Horz"
                     elif abs(y - y0) == 1 and x == x0:
                         direction = "Vert"
                     else:
-                        # Mauvais clic : reset du placement en cours (tout le bateau est reset) sinon ca fait des coincement de merde impossible à regler
+                        # Mauvais clic : reset du placement en cours (tout le bateau est reset)
                         print("Mauvaise direction, reset du bateau.")
                         self.blink(x, y, RED, OFF) # Ou GREEN si besoin de l'effet direct
                         for bx, by in bateau_en_cours:
@@ -634,11 +596,9 @@ class TrellisManager:
                         direction = None
                         return
 
-
                     bateau_en_cours.append((x, y))
                     self.set_led(x, y, GREEN)  # Marque la deuxième case en vert
                     print(f'2nd case at {x,y} / Direction detected: {direction}')
-
 
                 ################### 3eme  et 4eme case ###################
 
@@ -649,21 +609,20 @@ class TrellisManager:
                 # // Comporte tout le debug initial sur Github //
                 # Voir upload Github du 04/04/25 pour avoir une version test qui marche
                 # Code revisé et plus simple à lire
-                # La logique reste la même, le code originale ne prenait pas le sens de placement mais seulement la direction
-                # Le code suivant prend en compte les deux avec le xs et xy basé sur le max du batea_en_cours
+                # La logique reste la même, le code original ne prenait pas le sens de placement mais seulement la direction
+                  # Le code suivant prend en compte les 2 avec le xs et xy basés sur le max du bateau_en_cours
 
                 ##############################################################################
                 ##############################################################################
-
 
                 elif direction == "Horz" and len(bateau_en_cours) > 1:
 
                     print('In Horizontal placement')
 
-                    y_ref = bateau_en_cours[0][1] # Horizontal = même y pour toute les cases
+                    y_ref = bateau_en_cours[0][1] # Horizontal = même y pour toutes les cases
 
                     xs = [p[0] for p in bateau_en_cours] # Liste des x du bateaux en cours
-                    x_head = max(xs) # "Devant" / "tete" du bateau
+                    x_head = max(xs) # "Devant" / "tête" du bateau
                     x_tail = min(xs) # "Derrière" / "queue" du bateau
 
                     if y == y_ref:
@@ -697,7 +656,7 @@ class TrellisManager:
 
                     print('In Vertical placement')
 
-                    x_ref = bateau_en_cours[0][0] # Vertical = même x pour toute les cases
+                    x_ref = bateau_en_cours[0][0] # Vertical = même x pour toutes les cases
 
                     ys = [p[1] for p in bateau_en_cours] # Les y du bateau en cours de placement
                     y_head = max(ys)
@@ -730,7 +689,6 @@ class TrellisManager:
                         direction = None
                         return
 
-
                 # Vérifie si le bateau est complètement placé
                 if len(bateau_en_cours) == tailles_bateaux[bateau_actuel]:
                     # Marque le bateau comme placé (bleu)
@@ -750,7 +708,7 @@ class TrellisManager:
                     # Vérifie si tous les bateaux ont été placés
                     if bateau_actuel == len(tailles_bateaux):
                         print("Tous les bateaux ont été placés.")
-                        self.clear_all_callbacks()  # Désactive les callbacks # Désactive les callbacksn. //edit: marche pas comme je voulais
+                        self.clear_all_callbacks()  # Désactive les callbacks # Désactive les callbacksn. //
                         return
 
         # Configure les callbacks pour les boutons
@@ -787,7 +745,7 @@ class TrellisManager:
                         ships = self.bot_ships
 
                     for ship in ships:
-                        if (x, y) in ship and all(grid[sx][sy] == 3 for sx, sy in ship): # Check si les le bateau touché est censé être coulé. (Est ce que tout les coord du bateau (dans la liste de pos) sont à 3 (touchés) dans la grid)
+                        if (x, y) in ship and all(grid[sx][sy] == 3 for sx, sy in ship): # Check si les le bateau touché est censé être coulé. (Est ce que toutes les coord du bateau (dans la liste de pos) sont à 3 (touchés) dans la grid)
                             is_sunk = True
                             break
                     if is_sunk:
@@ -823,8 +781,7 @@ class TrellisManager:
         2 = Bateau
         3 = Bateau touché
 
-        Edit: Fix les print statement des bateaux coulés (repetition)
-
+        Edit: Fixe les print statement des bateaux coulés (répetition)
         """
         time.sleep(1.5)
 
@@ -839,22 +796,22 @@ class TrellisManager:
                             self.bot_targets.append((i, j))
 
             # Si une direction est déjà déterminée
-            if hasattr(self, "bot_direction") and self.bot_direction:  # hasattr(object, 'name"); check si un objet à un attribut spécifique, ici si il existe une direction donner dans la class
-                dx, dy = self.bot_direction                                            # self.bot_direction : (1, 0) = Horizontal / (0, 1) = Vertical, quel direction les coordonnées doivent aller ?
-                next_x, next_y = self.bot_last_hit[0] + dx, self.bot_last_hit[1] + dy  # Ajoute l'offset en fonction de la direction déterminé
+            if hasattr(self, "bot_direction") and self.bot_direction:  # hasattr(object, 'name"); check si un objet à un attribut spécifique, ici si il existe une direction donnée dans la class
+                dx, dy = self.bot_direction                                            # self.bot_direction : (1, 0) = Horizontal / (0, 1) = Vertical, dans quelle direction les coordonnées doivent aller ?
+                next_x, next_y = self.bot_last_hit[0] + dx, self.bot_last_hit[1] + dy  # Ajoute l'offset en fonction de la direction déterminée
 
                 if 0 <= next_x < 8 and 0 <= next_y < 8 and self.player_grid[next_x][next_y] not in [1, 3]:  # Regarde si l'offset est dans le plateau
                     tir = (next_x, next_y)
                 else:
                     # Si la direction échoue, inverse la direction
-                    self.bot_direction = (-dx, -dy) # (1,0) => (-1, 0) on va chercher l'autre bout du bateau, e.g [00003310] le bot à fait 3,3 puis 1 donc doit venir à gauche des 3.
+                    self.bot_direction = (-dx, -dy) # (1,0) => (-1, 0) on va chercher l'autre bout du bateau, e.g [00003310] le bot a fait 3,3 puis 1 donc doit venir à gauche des 3.
                     next_x, next_y = self.bot_last_hit[0] + self.bot_direction[0], self.bot_last_hit[1] + self.bot_direction[1]
                     if 0 <= next_x < 8 and 0 <= next_y < 8 and self.player_grid[next_x][next_y] not in [1, 3]: # Conditions d'existence du tir
                         tir = (next_x, next_y)
                     else:
                         # Si aucune direction valide, repasse en mode aléatoire
                         self.bot_direction = ()
-                        tir = self.bot_targets.pop(0) if self.bot_targets else None # Continue si il reste des cible spécifique
+                        tir = self.bot_targets.pop(0) if self.bot_targets else None # Continue si il reste des cible spécifiques
             else:
                 # Prend une cible parmi celles probables
                 tir = self.bot_targets.pop(0) if self.bot_targets else None
@@ -871,18 +828,13 @@ class TrellisManager:
         print('Bot turn ...')
         print(f'Cases adjacentes à vérifier : {self.bot_targets}')  # Debugging
 
-
         # Vérifie si un bateau est touché
 
         if tir is None:
         ################################################################################################################
-            # C'est là pour décorer mais on garde quand même
-            # raise TypeError('Tir is None : aucun tir valid trouvé') # J'espère ne pas avoir a y recourrir
+            # raise TypeError('Tir is None : aucun tir valid trouvé') 
 
-            # Il y a un problème dans la logique que j'arrive pas a identifier donc on prie mtn
-
-            # Dans la pratique, il est effectivement improbable que toutes les /cases adjacentes/ d'un bateau aient
-            # été testées avant que le /bateau soit coulé/, sauf si un problème logique empêche le bot de correctement
+            # Dans la pratique, il est effectivement improbable que toutes les /cases adjacentes/ d'un bateau aient été testées avant que le /bateau soit coulé/, sauf si un problème logique empêche le bot de correctement
             # "chasser" les cases adjacentes après avoir touché une partie du bateau.
 
             # Problèmes possible de l'erreur:
@@ -894,10 +846,6 @@ class TrellisManager:
             # Erreur dans la logique de marquage des cases
             # Erreur dans la logique de vérification des bateaux coulés
             # Si le bot passe en mode aléatoire trop tôt, il pourrait manquer des cases adjacentes valides.
-
-            # Désolé pour le pavé mais déja passé : 4h dessus
-            # ChatGPT y est d'aucune aide potable
-
         ################################################################################################################
 
             print(f'Erreur: aucune cible valide trouvée. Le bot est cassé mais faut pas que ca se sache ;)')
@@ -934,7 +882,7 @@ class TrellisManager:
                     elif y == self.bot_last_hit[1]:  # Même colonne = direction horizontale
                         self.bot_direction = (1 if x > self.bot_last_hit[0] else -1, 0) # (1,0) ou (-1,0) = horizontale; selon si on va à droite ou à gauche (sur l'axe des abscisses)
 
-            self.bot_last_hit = (x, y)  # Sauvegarde les  pour le round d'aprèscoordonnées du tir pour le round d'après
+            self.bot_last_hit = (x, y)  # Sauvegarde les pour le round d'après coordonnées du tir pour le round d'après
 
             # Vérifie si le bateau est coulé
             for ship in self.player_ships:
@@ -949,21 +897,20 @@ class TrellisManager:
 
                     break
 
-
         else:
             self.player_grid[x][y] = 1  # Marque comme raté
             self.blink(x, y, GRAY, GRAY, blink_bots_play)  # Gris pour un tir raté
             print(f'Raté en {(x, y)}')
 
-            # Le bot à raté c'est au tour du joueur
+            # Le bot a raté c'est au tour du joueur
             self.bot_attacked = True
             self.bot_attacking = False
 
         # Affiche le plateau du joueur pour visualiser le tir
         self.display_grid(self.player_grid, is_player_turn=False)
-        time.sleep(2)  # Ajoute un délai pour que le joueur puisse voir le (sinon ça pue)
+        time.sleep(2)  # Ajoute un délai pour que le joueur puisse voir 
 
-        if self.current_player_sunken_ships != self.player_sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulé (ca marche pas vraiment enfait)
+        if self.current_player_sunken_ships != self.player_sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulés
             self.current_player_sunken_ships = self.player_sunken_ships
             print(f"Bateau coulé par le bot : {self.current_player_sunken_ships}")
 
@@ -973,7 +920,6 @@ class TrellisManager:
             self.game_running = False
             self.initialize_board("endGame_Lose") # Ici, "Lose" car c'est la fin du tour du bot
             return
-
 
         print('')
         # Fin du tour du bot
@@ -989,7 +935,6 @@ class TrellisManager:
         3 = Bateau touché
 
         Edit: Régler la répetition du "Bateau coulé par le joueur : {ship}" à chaque play
-
         """
         print("Player turn ...")
         joueur_a_joue = False
@@ -998,9 +943,8 @@ class TrellisManager:
         def handle_player_input(x, y, edge):
             """
             Callback pour gérer l'entrée du joueur via les boutons NeoTrellis.
-
             """
-            nonlocal joueur_a_joue, tir_joueur # Global fonction mais local inner fonction.  Si questions, demander à Matteo :)
+            nonlocal joueur_a_joue, tir_joueur # Global fonction mais local inner fonction. 
             if edge == NeoTrellis.EDGE_RISING and not joueur_a_joue:  # Si c'est le premier bouton touché
                 tir_joueur = (x, y)
                 joueur_a_joue = True
@@ -1015,7 +959,6 @@ class TrellisManager:
         while not joueur_a_joue:
             self.trellis.sync()
             time.sleep(0.01)
-
 
         # Gère le tir du joueur
         x, y = tir_joueur
@@ -1045,9 +988,8 @@ class TrellisManager:
         else:
             print("Déjà tiré ici (ouvre tes yeux enfait !)")
 
-
         # Fin du tour du joueur / Annonce serial
-        if self.current_bot_sunken_ships != self.bot_sunken_ships: # Si un nouveau navire est coulé alors la console rapelle tous les bateaux coulé (ca marche pas vraiment enfait)
+        if self.current_bot_sunken_ships != self.bot_sunken_ships: # Si un nouveau navire est coulé alors la console rappele tous les bateaux coulés 
             self.current_bot_sunken_ships = self.bot_sunken_ships
             print(f"Bateau coulé par le joueur : {self.current_bot_sunken_ships}")
 
@@ -1070,13 +1012,12 @@ class TrellisManager:
         1 = Tir raté
         2 = Bateau
         3 = Bateau touché
-
         """
 
         self.player_grid = [[0] * 8 for i in range(8)]  # Plateau du joueur
         self.bot_grid = [[0] * 8 for i in range(8)]  # Plateau du bot
         self.bot_last_hit = None
-        self.bot_targets = []  # Cases autour d'un bateau touché (pour "tourné" autour)
+        self.bot_targets = []  # Cases autour d'un bateau touché (pour "tourner" autour)
         self.bot_attacking = True
         self.bot_attacked = False
         self.player_turn = False
@@ -1102,10 +1043,9 @@ class TrellisManager:
         #Placement des bateaux du joueur sur la grille de jeu
         print('Bateaux du joueur :')
         for ship in self.player_ships:
-            print(ship) # Affiche les coordonnées des bateaux du joueur (fraichement choisi)
+            print(ship) # Affiche les coordonnées des bateaux du joueur 
             for x, y in ship:
                 self.player_grid[x][y] = 2  # Bateaux
-
 
         ##################################################
         # Bateaux du bot (utilise placer_bateaux_bots)
@@ -1113,16 +1053,15 @@ class TrellisManager:
         self.bot_ships = self.placer_bateaux_bots()
         print('Bateaux du bot :')
         for ship in self.bot_ships:
-            print(ship) # Affiche les coordonnées des bateaux choisi par le bot
+            print(ship) # Affiche les coordonnées des bateaux choisient par le bot
             for x, y in ship:
                 self.bot_grid[x][y] = 2
 
         ##################################################
 
-
         while self.game_running:
 
-            # Reset button ongoing dev (j'espère que personne ne lira ca et que j'aurais dev ca d'ici là)
+            # Reset button ongoing dev
             """
             # Vérifie si un reset a été demandé
             if self.reset_requested:
@@ -1131,7 +1070,6 @@ class TrellisManager:
                 self.initialize_board("init")  # Réinitialise le plateau
                 self.menu()  # Retourne au menu principal
                 return  # Quitte la boucle principale
-
             """
 
             if self.bot_attacking:
@@ -1181,14 +1119,13 @@ class TrellisManager:
 
 ###########################################################################
 
-
     def envoyer(self, message):
         """
         Essaye d'envoyer le message
         """
         try:
             communication.write((message + "\n").encode())
-        except Exception as exept: # Génère un exeption pour le debug
+        except Exception as exept: # Génère un exception pour le debug
             print("Erreur envoi:", exept)
 
     def lire(self):
@@ -1213,7 +1150,6 @@ class TrellisManager:
         1 = Tir raté
         2 = Bateau touché
         3 = Bateau coulé
-
         """
         for ship in self.opponent_boats:
             if (x, y) in ship:
