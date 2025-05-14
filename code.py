@@ -414,6 +414,11 @@ class TrellisManager:
             self.trellis.activate_key(6, 6, NeoTrellis.EDGE_RISING)
             self.trellis.set_callback(6, 6, self.handle_menu)
 
+            # Evite les résidus visuels après chaque initialisations du menu
+            for x in range(7):
+                for y in range(7):
+                    self.set_led(x, y, OFF)
+
             leds_ = [(1,1),(1,2),(5,1),(5,2),(6,1),(6,2)]  # Boutons du menu
             if mode == 'PVE':
                 for i in range(2):
