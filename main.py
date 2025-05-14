@@ -315,8 +315,10 @@ def game_loop(port_plateau_1, port_plateau_2):
             if cmd.startswith("TIR:"): # On envoie le tir réalisé pour avoir une réponse.
                 envoyer(port_plateau_2, cmd)
             
-            elif cmd == "WIN":
-                print("WIN du joueur 1")
+            elif cmd == "LOSE":
+                print("WIN du joueur 2")
+                envoyer(port_plateau_2,"VICTOIRE")
+                time.sleep(1)
                 break
 
             joueur_actuel = 1
@@ -328,8 +330,10 @@ def game_loop(port_plateau_1, port_plateau_2):
             if cmd.startswith("TIR:"):
                 envoyer(port_plateau_1, cmd)
 
-            elif cmd == "WIN":
-                print("WIN du joueur 2")
+            elif cmd == "LOSE":
+                print("WIN du joueur 1")
+                envoyer(port_plateau_1,"VICTOIRE")
+                time.sleep(1)
                 break
 
             joueur_actuel = 0
@@ -339,6 +343,7 @@ def game_loop(port_plateau_1, port_plateau_2):
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
 # Voir github commit du 23/04/25
+# Most likely outdated as possible
 
     
 #Set up les ports
