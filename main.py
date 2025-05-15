@@ -115,28 +115,30 @@ def safe_open(port_name, baud=9600, timeout=1):
 
 def check_connections():
     """
-    Check de manière dynamique si un port est déconnecté, ca évite de relancer le script a chaque fois.
+    Vérifie si les ports sont toujours actifs et connectés.
+    Nettoie proprement si un port est mort, mais attend un peu après une déconnexion massive pour éviter un mental breakdown de la raspberry (elle est trop conne).
+
+    En gros si un port est déco / changer, on le recheck quand même pour être sur qu'il soit vraiment déconnecté et non juste un bus USB linux de merde qui bouge.
     """
-    disconnected = []
+
+    to_remove = []
 
     for port_name, ser in connected_ports.items():
         try:
-            # Essaye de lire 1 byte, sans bloquer (timeout déjà défini)
-            test = ser.read(1)
-            if test == b'':  # Ça peut aussi être signe de port fermé (EOF)
-                pass  # Pas une erreur
-        except (serial.SerialException, OSError) as e:
-            print(f"\n[X] Plateau déconnecté ({port_name}) : {e}")
-            disconnected.append(port_name)
+            ser.in_waiting  # Simple test léger pour voir si le port est vivant
+        except Exception as e:
+            print(f"[X] Plateau déconnecté ({port_name}) : {e}")
+            to_remove.append(port_name)
 
-    for port_name in disconnected: # Retire le port proprement de là où il était (si on le rebranche y'a pas de problème)
-        ser = connected_ports[port_name]
-        try:
-            ser.close()
-        except:
-            pass
-        del connected_ports[port_name]
-        print(f"[~] Port {port_name} nettoyé et retiré.\n")
+    if to_remove:
+        print("[INFO] Détection de déconnexion USB - Pause pour stabiliser...")
+        time.sleep(2)  # << PAUSE pour laisser Linux rescanner tous les ports (c'est une attente vraiment chiante mais nécessaire)
+        for port_name in to_remove:
+            try:
+                connected_ports[port_name].close()
+            except:
+                pass
+            del connected_ports[port_name]
 
 def detect_devices(baud=9600, timeout=1):
     """
@@ -160,12 +162,12 @@ def detect_devices(baud=9600, timeout=1):
     """
 
     ports = serial.tools.list_ports.comports()
-    new_feathers = []
+    feather_ports = []
     
     for port in ports:
          # Skip les ports Bluetooth connus (ils ouvrent mais n'envoie rien c'est chiant)
         if "Bluetooth" in port.description or "Bluetooth" in port.device:
-            print(f"[IGNORÉ] Port Bluetooth détecté : {port.device}\n")
+            #print(f"[IGNORÉ] Port Bluetooth détecté : {port.device}\n")
             continue
         
         #Skip les ports déjà connectés (c plus bo pour la console)
@@ -175,26 +177,27 @@ def detect_devices(baud=9600, timeout=1):
             
         print("----------")
         print(f"Nom du port     : {port.device}")
-        print(f"Description     : {port.description}")
-        print(f"Fabricant       : {port.manufacturer}")
-        print(f"Produit         : {port.product}")
+        #print(f"Description     : {port.description}")
+        #print(f"Fabricant       : {port.manufacturer}")
+        #print(f"Produit         : {port.product}")
         print(f"Numéro de série / UID : {port.serial_number}")
         print("----------")
 
-        port_id = port.device
-        if port_id not in connected_ports:
+        try:
+            # Attend un peu que CircuitPython finisse de redémarrer
+            time.sleep(0.5)
 
-            # Teste si le port est ouvert et peut communiquer eviter la diff entre console et usb_cdc.data
-            print(f"Test du port : {port_id}")
-            if try_handshake(port_id):
-                ser = safe_open(port_id)
+            # Utilise TA FONCTION EXISTANTE handshake() pour checker
+            if try_handshake(port.device):
+                ser = safe_open(port.device)
                 if ser:
-                    connected_ports[port_id] = ser
-                    print(f"[✓] Plateau connecté sur {port_id}")
-                    new_feathers.append(ser)
+                    connected_ports[port.device] = ser
+                    feather_ports.append(port.device)
+                    print(f"[✓] Plateau connecté sur {port.device}")
+        except Exception as e:
+            print(f"[!] Erreur lors de la tentative de handshake sur {port.device} : {e}")
 
-    return new_feathers
-
+    return feather_ports
 
 
 def game_ready(port_plateau_1, port_plateau_2):
@@ -312,8 +315,10 @@ def game_loop(port_plateau_1, port_plateau_2):
             if cmd.startswith("TIR:"): # On envoie le tir réalisé pour avoir une réponse.
                 envoyer(port_plateau_2, cmd)
             
-            elif cmd == "WIN":
-                print("WIN du joueur 1")
+            elif cmd == "LOSE":
+                print("WIN du joueur 2")
+                envoyer(port_plateau_2,"VICTOIRE")
+                time.sleep(1)
                 break
 
             joueur_actuel = 1
@@ -325,8 +330,10 @@ def game_loop(port_plateau_1, port_plateau_2):
             if cmd.startswith("TIR:"):
                 envoyer(port_plateau_1, cmd)
 
-            elif cmd == "WIN":
-                print("WIN du joueur 2")
+            elif cmd == "LOSE":
+                print("WIN du joueur 1")
+                envoyer(port_plateau_1,"VICTOIRE")
+                time.sleep(1)
                 break
 
             joueur_actuel = 0
@@ -336,26 +343,51 @@ def game_loop(port_plateau_1, port_plateau_2):
 
 # Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
 # Voir github commit du 23/04/25
+# Most likely outdated as possible
 
     
 #Set up les ports
 port1 = None
 port2 = None
 
+print("[INFO] Main script lunched")
+
 while True:
 
     check_connections() # Check si y'as pas un plateau qui se barre
     detect_devices() # Détecte les nouveau plateau avant de commencé la partie
 
-    if len(connected_ports) == 1:
-        print("[1] Un seul plateau détecté. En attente du second...\n")
+    # On veut 2 plateaux fonctionnels avant de démarrer
+    if len(connected_ports) < 2:
+        print(f"[WAIT] Plateaux connectés : {len(connected_ports)}. En attente de 2 plateaux...\n")
+        time.sleep(2)
+        continue
 
-    if len(connected_ports) >= 2:
-        ports_list = list(connected_ports.values())
-        print("[2] Deux plateaux connectés !\n") # peut apparaître légèrement en retard car il fini son analyse complète de tout les ports avant d'arriver là
+    ports_list = list(connected_ports.values()) # Num serial des plateaux connectés
 
-   
-        game_ready(ports_list[0], ports_list[1])
-       
+    # Assurer que les 2 ports sont toujours accessibles
+    try:
+        if ports_list[0].is_open and ports_list[1].is_open:
+            print("[✓] Deux plateaux actifs détectés. Lancement du jeu.\n")
+            game_ready(ports_list[0], ports_list[1])
+        else:
+            print("[X] Un port est fermé. Réinitialisation en attente.")
+            time.sleep(2)
+            continue
 
-    time.sleep(2)
+    except Exception as e:
+        print(f"[ERROR] Erreur en vérifiant les ports : {e}")
+        time.sleep(2)
+        continue
+
+    # Après la partie (quand game_ready + game_loop sont finis), on recommence depuis zéro
+    print("[INFO] Partie terminée. Reset des connexions.\n")
+
+    # Ferme proprement tout ce qui était utilisé
+    for ser in ports_list:
+        try:
+            ser.close()
+        except:
+            pass
+    connected_ports.clear()
+    time.sleep(2)  # Petite pause avant de redétecter
