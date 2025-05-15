@@ -318,7 +318,7 @@ def game_loop(port_plateau_1, port_plateau_2):
             elif cmd == "LOSE":
                 print("WIN du joueur 2")
                 envoyer(port_plateau_2,"VICTOIRE")
-                time.sleep(1)
+                time.sleep(4)
                 break
 
             joueur_actuel = 1
@@ -333,7 +333,7 @@ def game_loop(port_plateau_1, port_plateau_2):
             elif cmd == "LOSE":
                 print("WIN du joueur 1")
                 envoyer(port_plateau_1,"VICTOIRE")
-                time.sleep(1)
+                time.sleep(4)
                 break
 
             joueur_actuel = 0
