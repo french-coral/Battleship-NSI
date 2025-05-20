@@ -26,7 +26,7 @@ connected_ports = {} # UID : serial.Serial object
     #       SCORE:x,y,valeur → afficher le score
     #
     #
-    # Les fonctions suivante sont là pour decrypter les messages et les envoyés.
+    # Les fonctions suivantes sont là pour décrypter les messages et les envoyer.
     # lire(plateau): plateau étant le serial du plateau
     # envoyer(plateau,message): plateau étant le serial du plateau et message le message à envoyer
     
@@ -54,14 +54,14 @@ def lire(plateau):
 
 #---------------------------------DEBUG---------------------------------#
 #
-#  Le temps de debug toute les fonctionalité concernant le plateau_2 seront desactivés,
+#  Le temps de debug toutes les fonctionalités concernant le plateau_2 seront desactivés
 #  à comment in si besoin.
 #
 #-----------------------------------------------------------------------#
 
 def get_port_by_serial(target_serial, detected_ports = None):
     """
-    Récupère les ports qui recoive une UID précise,
+    Récupère les ports qui recoivent une UID précise,
     Ici:
     Plateau 1: 4657A1084E384B53202020522D4316FF
     Plateau 2: 6E9E13C44E384B53202020521E2216FF
@@ -77,17 +77,17 @@ def get_port_by_serial(target_serial, detected_ports = None):
 # Handshake PING/OK
 def try_handshake(port_name, baud=9600, timeout=1.5):
     """
-    Force la communication feather - server pour éviter d'avoir un timing pourri
+    Force la communication feather - serveur pour éviter d'avoir un mauvais timing 
     """
     try:
         with serial.Serial(port_name, baud, timeout=timeout) as ser:
             time.sleep(0.1) # laisse la Feather respirer
 
-            ser.reset_input_buffer() # Soit disant plus clean mais ca pete tout
+            ser.reset_input_buffer() 
             ser.reset_output_buffer()
 
             print("Pinging ...\n")
-            ser.write(b"PING\n")  # Commande bidon qui attend une réponse connue (ok)
+            ser.write(b"PING\n")  # Commande qui attend une réponse connue (ok)
             ser.flush()
             time.sleep(0.3)
 
@@ -104,7 +104,7 @@ def try_handshake(port_name, baud=9600, timeout=1.5):
 
 def safe_open(port_name, baud=9600, timeout=1):
     """
-    Check si le port COMx est pas déjà utilisé autre part (au hassard l'IDE Mu)
+    Check si le port COMx est pas déjà utilisé autre part (au hasard l'IDE Mu)
     Si c'est bon alors il ouvre le port comme il faut
     """
     try:
@@ -116,9 +116,9 @@ def safe_open(port_name, baud=9600, timeout=1):
 def check_connections():
     """
     Vérifie si les ports sont toujours actifs et connectés.
-    Nettoie proprement si un port est mort, mais attend un peu après une déconnexion massive pour éviter un mental breakdown de la raspberry (elle est trop conne).
+    Nettoie proprement si un port est mort, mais attend un peu après une déconnexion massive pour éviter un mental breakdown de la raspberry.
 
-    En gros si un port est déco / changer, on le recheck quand même pour être sur qu'il soit vraiment déconnecté et non juste un bus USB linux de merde qui bouge.
+    Si un port est déco / changé, on le recheck quand même pour être sûr qu'il soit vraiment déconnecté et non juste un bus USB linux qui bouge.
     """
 
     to_remove = []
@@ -132,7 +132,7 @@ def check_connections():
 
     if to_remove:
         print("[INFO] Détection de déconnexion USB - Pause pour stabiliser...")
-        time.sleep(2)  # << PAUSE pour laisser Linux rescanner tous les ports (c'est une attente vraiment chiante mais nécessaire)
+        time.sleep(2)  # << PAUSE pour laisser Linux rescanner tous les ports (c'est une attente nécessaire)
         for port_name in to_remove:
             try:
                 connected_ports[port_name].close()
@@ -142,15 +142,15 @@ def check_connections():
 
 def detect_devices(baud=9600, timeout=1):
     """
-    Détecte les plateaux branché sur les ports USB de la machine (PC ou raspberry pi).
-    Envoie un PING et attend une reponse, oh OK il renvoie un accusé de réception pour s'assurer que
+    Détecte les plateaux branchés sur les ports USB de la machine (PC ou raspberry pi).
+    Envoie un PING et attend une réponse, oh OK il renvoie un accusé de réception pour s'assurer que
     les 2 parties (plateau et script maître) confirme la conection à l'autre.
 
     Il skip : - Les ports bluetooth qui attendent dans le vide une réponse
               - Les ports déjà connectés  
 
-    Testing purposes : Affiche l'etat des ports dispos
-    La FeatherM4 devrait ressembler à ca:
+    Testing purposes : Affiche l'état des ports dispos
+    La FeatherM4 devrait ressembler à ça:
     ----------
     Nom du port     : COMx sous Windows et /dev/ttyACMx sous Linux
     Description     : Périphérique série USB (Port de communiquation)
@@ -165,12 +165,12 @@ def detect_devices(baud=9600, timeout=1):
     feather_ports = []
     
     for port in ports:
-         # Skip les ports Bluetooth connus (ils ouvrent mais n'envoie rien c'est chiant)
+         # Skip les ports Bluetooth connus (ils ouvrent mais n'envoie rien)
         if "Bluetooth" in port.description or "Bluetooth" in port.device:
             #print(f"[IGNORÉ] Port Bluetooth détecté : {port.device}\n")
             continue
         
-        #Skip les ports déjà connectés (c plus bo pour la console)
+        #Skip les ports déjà connectés
         if port.device in connected_ports:
             print(f"[IGNORÉ] Port déjà connecté : {port.device}\n")
             continue
@@ -202,7 +202,7 @@ def detect_devices(baud=9600, timeout=1):
 
 def game_ready(port_plateau_1, port_plateau_2):
     """
-    Attend que les 2 plateaux soit dans le mode duo (est cliqué sur l'icon du mode duo).
+    Attend que les 2 plateaux soient dans le mode duo (est cliqué sur l'icon du mode duo).
     """
     p1_duo_activated = False
     p2_duo_activated = False
@@ -285,7 +285,7 @@ def start_game(port_plateau_1, port_plateau_2):
     envoyer(port_plateau_2, boats1)  # J2 reçoit les bateaux de J1
     print("[✓] Bateaux envoyés aux deux joueurs.")
 
-    time.sleep(0.5)  # Le temps que les messages arrivent tranquillement
+    time.sleep(0.5)  # Le temps que les messages arrivent 
 
     game_running = True
     game_loop(port_plateau_1, port_plateau_2)
@@ -341,7 +341,7 @@ def game_loop(port_plateau_1, port_plateau_2):
     print("Partie terminée.")
 
 
-# Boucle principale du 1v1 p1 et p2 à remplacer part port_plateau_1 et port_plateau_2
+# Boucle principale du 1v1 p1 et p2 à remplacer par port_plateau_1 et port_plateau_2
 # Voir github commit du 23/04/25
 # Most likely outdated as possible
 
@@ -354,8 +354,8 @@ print("[INFO] Main script lunched")
 
 while True:
 
-    check_connections() # Check si y'as pas un plateau qui se barre
-    detect_devices() # Détecte les nouveau plateau avant de commencé la partie
+    check_connections() # Check si les plateaux sont connectés
+    detect_devices() # Détecte les nouveau plateaux avant de commencer la partie
 
     # On veut 2 plateaux fonctionnels avant de démarrer
     if len(connected_ports) < 2:
@@ -365,7 +365,7 @@ while True:
 
     ports_list = list(connected_ports.values()) # Num serial des plateaux connectés
 
-    # Assurer que les 2 ports sont toujours accessibles
+    # Assure que les 2 ports sont toujours accessibles
     try:
         if ports_list[0].is_open and ports_list[1].is_open:
             print("[✓] Deux plateaux actifs détectés. Lancement du jeu.\n")
